@@ -1,0 +1,123 @@
+# Stack de desarrollo de go-starter.
+#
+# Vive en la raiz del repo a proposito: el detector de devherd solo registra un
+# proyecto si encuentra un compose o un Dockerfile aqui. Con el compose en un
+# subdirectorio, 'devherd up' funciona pero el proyecto no queda registrado y
+# entonces 'proxy apply', 'open' y 'logs <nombre>' dejan de encontrarlo.
+#
+# Se levanta con devherd, nunca con 'docker compose' directo.
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    # Sin 'ports': la base no se expone al host. Tres proyectos peleando por el
+    # 5432 es la colision mas comun. Para un cliente SQL, usa la red de docker.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  api:
+    build:
+      context: ./docker/api
+      args:
+        UID: ${HOST_UID}
+        GID: ${HOST_GID}
+    # Corre con el UID del host para que lo que se genere en el bind mount
+    # (tmp/ de air) no quede de root.
+    user: "${HOST_UID}:${HOST_GID}"
+    working_dir: /workspace
+    environment:
+      APP_ENV: dev
+      HTTP_ADDR: ":8080"
+      DATABASE_URL: postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=disable
+      # Sin default a proposito: si falta, el proceso muere al arrancar.
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY}
+      COOKIE_SECURE: ${COOKIE_SECURE}
+      API_DOCS_ENABLED: ${API_DOCS_ENABLED}
+    command: ["air", "-c", ".air.toml"]
+    volumes:
+      - ./api:/workspace
+      # Las caches de Go, fuera del bind mount: en volumen nombrado sobreviven
+      # al reinicio y no ensucian el repo.
+      - go_mod:/go/pkg/mod
+      - go_build:/gocache
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/v1/healthz >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      # La primera compilacion baja modulos y compila desde cero.
+      start_period: 180s
+
+  web:
+    build:
+      context: ./docker/web
+      args:
+        UID: ${HOST_UID}
+        GID: ${HOST_GID}
+    user: "${HOST_UID}:${HOST_GID}"
+    working_dir: /workspace
+    environment:
+      # npm y nuxt escriben cache y logs en $HOME; el usuario del host no existe
+      # en la imagen y sin esto apunta a / y falla.
+      HOME: /tmp
+      # La que usa el navegador: mismo origen, el edge la enruta.
+      NUXT_PUBLIC_API_BASE: /api/v1
+      # La que usa el SSR: red interna del compose. No son intercambiables.
+      # Ver docs/06-flujos.md seccion 3.
+      NUXT_API_INTERNAL: http://api:8080/api/v1
+    # 'npm install' en cada arranque porque node_modules vive en un volumen que
+    # nace vacio. Con el volumen ya poblado y el lockfile sin cambios, npm no
+    # baja nada y agrega ~1 s.
+    command: ["sh", "-c", "npm install && npm run dev"]
+    volumes:
+      - ./web:/workspace
+      # Tapa el node_modules del bind mount: los binarios nativos que instala el
+      # host (glibc) no corren en la imagen alpine, y al reves igual.
+      - web_node_modules:/workspace/node_modules
+    healthcheck:
+      # busybox trae wget; no hace falta instalar nada.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 120s
+
+  edge:
+    # La unica puerta de entrada. No publica puertos: devherd lo cuelga de la
+    # red externa 'infra_web' mediante .devherd.proxy.override.yml, y el Caddy
+    # compartido lo alcanza por alias.
+    image: caddy:2-alpine
+    volumes:
+      - ./docker/edge/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    healthcheck:
+      # Contra la API de administracion de Caddy: mide la salud de 'edge', no la
+      # de lo que hay detras. De eso ya se encargan los healthcheck de cada uno.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:2019/config/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  db_data:
+  go_mod:
+  go_build:
+  web_node_modules:

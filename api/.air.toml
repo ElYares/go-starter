@@ -1,0 +1,20 @@
+# Recarga en caliente del backend. air recompila y reinicia en cada guardado.
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/server ./cmd/server"
+  bin = "./tmp/server"
+  include_ext = ["go", "yaml", "yml", "sql"]
+  exclude_dir = ["tmp", "test"]
+  # Sin esto, air reinicia en bucle: el binario que escribe en tmp/ dispara su
+  # propio vigilante.
+  exclude_regex = ["_test\\.go"]
+  delay = 300
+  stop_on_error = false
+
+[log]
+  time = true
+
+[misc]
+  clean_on_exit = true

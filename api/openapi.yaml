@@ -1,0 +1,150 @@
+# El contrato. Fuente de verdad: se escribe a mano y primero, y de aqui salen
+# los tipos de los dos lados. Ver docs/05-contratos-api.md y la Decision 010.
+openapi: 3.1.0
+
+info:
+  title: go-starter API
+  version: 0.1.0
+  license:
+    name: MIT
+    identifier: MIT
+  description: |
+    Starter de Go + Nuxt. En la fase 0 solo existen los endpoints de salud;
+    el resto llega con los modulos.
+
+    Toda la superficie vive bajo `/api/v1`. Lo publico y sin sesion, bajo
+    `/api/v1/public`.
+
+servers:
+  - url: /api/v1
+    description: Mismo origen, detras del edge
+
+# Por omision todo pide sesion. Lo publico se marca operacion por operacion con
+# 'security: []', para que abrir una ruta al mundo sea un acto visible en el
+# diff y no un olvido. Ver docs/04-reglas-de-crud.md seccion 5.
+security:
+  - cookieAuth: []
+
+tags:
+  - name: salud
+    description: Estado del proceso y de sus dependencias
+
+paths:
+  /healthz:
+    get:
+      tags: [salud]
+      summary: El proceso vive
+      description: |
+        No toca la base a proposito. Mezclar las dos preguntas hace que un
+        reinicio de la base parezca un proceso muerto.
+      operationId: healthz
+      security: []
+      responses:
+        "200":
+          description: El proceso responde
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+              example:
+                status: ok
+        "500":
+          $ref: "#/components/responses/Problem"
+
+  /readyz:
+    get:
+      tags: [salud]
+      summary: El proceso puede atender
+      description: Comprueba que la base responda.
+      operationId: readyz
+      security: []
+      responses:
+        "200":
+          description: Listo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Readiness"
+              example:
+                status: ok
+                checks: { db: up }
+        "503":
+          description: Alguna dependencia no responde
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Readiness"
+              example:
+                status: unavailable
+                checks: { db: down }
+                traceId: 9f2c1a7b4e0d5c68a1b3d4e5f6a7b8c9
+        "500":
+          $ref: "#/components/responses/Problem"
+
+components:
+  securitySchemes:
+    cookieAuth:
+      # La sesion viaja en la cookie 'at', HttpOnly, sobre un solo origen. El
+      # frontend no la lee ni la adjunta: la manda el navegador. Decision 007.
+      type: apiKey
+      in: cookie
+      name: at
+
+  responses:
+    Problem:
+      description: Error, en la forma unica de toda la API
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+  schemas:
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+
+    Readiness:
+      type: object
+      required: [status, checks]
+      properties:
+        status:
+          type: string
+          enum: [ok, unavailable]
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+            enum: [up, down]
+        traceId:
+          type: string
+          description: Presente cuando algo fallo. Es lo que se busca en el log.
+
+    Problem:
+      description: |
+        La forma unica de error de toda la API (RFC 7807) con dos campos
+        propios: `code`, estable y en mayusculas, es lo que el cliente
+        interpreta; `traceId` es lo que se busca en el log.
+        Ver docs/04-reglas-de-crud.md seccion 6.
+      type: object
+      required: [title, status, code, traceId]
+      properties:
+        type: { type: string, default: "about:blank" }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code: { type: string, example: VALIDATION_FAILED }
+        traceId: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, code, message]
+            properties:
+              field: { type: string }
+              code: { type: string }
+              message: { type: string }

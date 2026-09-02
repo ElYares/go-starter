@@ -1,0 +1,99 @@
+# Tres trabajos en paralelo. Ninguno depende de otro: si el frontend esta roto,
+# igual quieres saber si el backend lo esta.
+#
+# Las versiones de las acciones son las ultimas al 2026-09-02, consultadas con
+# 'gh api repos/<accion>/releases/latest'. Subir de a un major "por prudencia"
+# nace desatrasado y trae el mismo trabajo otra vez.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: api (go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
+
+      - name: Formato
+        # gofmt no devuelve codigo de error: lista archivos. Sin este 'if', un
+        # archivo mal formateado pasa el trabajo en verde.
+        run: |
+          sin_formato=$(gofmt -l .)
+          if [ -n "$sin_formato" ]; then
+            echo "Archivos sin formatear:"; echo "$sin_formato"; exit 1
+          fi
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Pruebas
+        # -count=1 desactiva la cache de resultados: en CI queremos la ejecucion
+        # real, no un "ok (cached)".
+        run: go test -count=1 ./...
+
+  web:
+    name: web (nuxt)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+
+      # 'test:run', nunca 'npm test' a secas: vitest se queda en watch y cuelga
+      # el runner hasta el timeout.
+      - name: Pruebas
+        run: npm run test:run
+
+      - name: Tipos
+        run: npm run typecheck
+
+      # No es redundante con lo anterior: el build resuelve los imports diferidos
+      # de las rutas, que las pruebas no ejercitan.
+      - name: Build
+        run: npm run build
+
+  contract:
+    name: contract (openapi)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Lint del contrato
+        run: npx --yes @redocly/cli@latest lint api/openapi.yaml
+
+      # Pendiente de HU-006: cuando existan los tipos generados, este trabajo
+      # tiene que regenerarlos y fallar si el diff no esta vacio. Sin eso, un
+      # spec cambiado sin regenerar pasa en verde y el frontend compila contra
+      # un contrato que ya no existe.

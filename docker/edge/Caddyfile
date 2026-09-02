@@ -1,0 +1,32 @@
+{
+	# El healthcheck del contenedor golpea la API de administracion cada 10s y
+	# Caddy la registra en nivel info. Sin esta exclusion, 'devherd logs' queda
+	# sepultado bajo el latido de su propio healthcheck.
+	log {
+		exclude admin.api
+	}
+}
+
+# Puerta unica del stack. Existe por una restriccion de devherd: el proxy
+# compartido apunta a un solo servicio y un solo puerto, sin reglas por ruta.
+# El ruteo /api vs / tiene que ocurrir aqui dentro.
+#
+# El efecto secundario es el que importa: un solo origen. Sin CORS, sin
+# preflights, y cookies HttpOnly con SameSite=Lax en vez de SameSite=None.
+# Ver docs/05-contratos-api.md y la Decision 007 del vault.
+:80 {
+	encode gzip
+
+	# El backend vive bajo /api de punta a punta, asi que no hay reescritura de
+	# ruta: lo que llega es lo que Go espera.
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+
+	# Todo lo demas a Nuxt. Caddy pasa los WebSockets de forma transparente, asi
+	# que el HMR no necesita configuracion de este lado (si del lado de Vite:
+	# ver web/nuxt.config.ts).
+	handle {
+		reverse_proxy web:3000
+	}
+}

@@ -1,0 +1,22 @@
+# Peticiones de la API para lanzar desde el editor (REST Client de VS Code,
+# kulala/rest.nvim en Neovim). Versionado a proposito: es documentacion que se
+# ejecuta.
+#
+# La otra forma de probar es la UI en http://go-starter.localhost/api/v1/docs,
+# que vive en el mismo origen y por eso manda las cookies de sesion sola.
+
+@host = http://go-starter.localhost/api/v1
+
+### El proceso vive
+GET {{host}}/healthz
+
+### El proceso puede atender (503 si la base no responde)
+GET {{host}}/readyz
+
+### El contrato en crudo
+GET {{host}}/openapi.yaml
+
+### Propagar un traceId propio: el mismo valor vuelve en la respuesta y aparece
+### en el log del contenedor. Util para encontrar una peticion concreta.
+GET {{host}}/healthz
+X-Trace-Id: prueba-local-0001
