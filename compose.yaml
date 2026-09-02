@@ -43,6 +43,9 @@ services:
       JWT_SIGNING_KEY: ${JWT_SIGNING_KEY}
       COOKIE_SECURE: ${COOKIE_SECURE}
       API_DOCS_ENABLED: ${API_DOCS_ENABLED}
+      # Solo desarrollo. En produccion las migraciones son un paso explicito del
+      # despliegue (`cmd/migrate`): dos replicas migrando a la vez es una carrera.
+      MIGRATE_ON_START: "true"
     command: ["air", "-c", ".air.toml"]
     volumes:
       - ./api:/workspace

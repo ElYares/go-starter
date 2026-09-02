@@ -37,12 +37,3 @@ func (a *App) readyz(w http.ResponseWriter, r *http.Request) {
 		"checks": map[string]string{"db": "up"},
 	})
 }
-
-// noEncontrado atiende lo que ningun patron reclamo.
-//
-// Cuando exista la sesion, el middleware contestara 401 antes de llegar aqui
-// para las rutas protegidas: una ruta inexistente dara 401 sin cookies y 404
-// con ellas. Es esperado, y las pruebas de 404 tendran que autenticar primero.
-func (a *App) noEncontrado(w http.ResponseWriter, r *http.Request) {
-	httpx.WriteProblem(w, r, httpx.NotFound())
-}

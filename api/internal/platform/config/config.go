@@ -16,6 +16,7 @@ type Config struct {
 	JWTSigningKey  string
 	CookieSecure   bool
 	APIDocsEnabled bool
+	MigrateOnStart bool
 }
 
 func (c Config) IsDev() bool { return c.Env == "dev" }
@@ -45,6 +46,11 @@ func Load() (Config, error) {
 		JWTSigningKey:  require("JWT_SIGNING_KEY"),
 		CookieSecure:   boolWithDefault("COOKIE_SECURE", true),
 		APIDocsEnabled: boolWithDefault("API_DOCS_ENABLED", false),
+		// Migrar al arrancar es comodo en desarrollo y una carrera en
+		// produccion: dos replicas aplicando la misma migracion a la vez. Por
+		// eso el default es false y en produccion se usa `cmd/migrate` como
+		// paso explicito del despliegue. Ver docs/08-infra-local.md.
+		MigrateOnStart: boolWithDefault("MIGRATE_ON_START", false),
 	}
 
 	if len(missing) > 0 {
