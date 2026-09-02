@@ -57,29 +57,6 @@ func TraceID(next http.Handler) http.Handler {
 	})
 }
 
-// Recover va antes del logger, para que un panico tambien quede registrado por
-// el. La respuesta es generica a proposito: el detalle se queda en el log.
-func Recover(log *slog.Logger) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			defer func() {
-				if rec := recover(); rec != nil {
-					log.ErrorContext(r.Context(), "panico en handler",
-						slog.Any("panic", rec),
-						slog.String("traceId", TraceIDFrom(r.Context())),
-						slog.String("path", r.URL.Path),
-					)
-					w.Header().Set("Content-Type", "application/problem+json")
-					w.WriteHeader(http.StatusInternalServerError)
-					_, _ = w.Write([]byte(`{"title":"Error interno","status":500,"code":"INTERNAL_ERROR","traceId":"` +
-						TraceIDFrom(r.Context()) + `"}`))
-				}
-			}()
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
 type statusWriter struct {
 	http.ResponseWriter
 	status int

@@ -2,10 +2,10 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"time"
 
+	"github.com/elyares/go-starter/api/internal/platform/httpx"
 	"github.com/elyares/go-starter/api/internal/platform/observ"
 )
 
@@ -13,7 +13,7 @@ import (
 // dos preguntas hace que un reinicio de la base parezca un proceso muerto y
 // dispare reinicios que no arreglan nada.
 func (a *App) healthz(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	httpx.WriteJSON(w, r, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // readyz responde si el proceso puede atender: hoy, si la base contesta.
@@ -24,7 +24,7 @@ func (a *App) readyz(w http.ResponseWriter, r *http.Request) {
 	if err := a.pool.Ping(ctx); err != nil {
 		a.log.WarnContext(ctx, "readyz: la base no responde",
 			"error", err, "traceId", observ.TraceIDFrom(ctx))
-		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+		httpx.WriteJSON(w, r, http.StatusServiceUnavailable, map[string]any{
 			"status":  "unavailable",
 			"checks":  map[string]string{"db": "down"},
 			"traceId": observ.TraceIDFrom(ctx),
@@ -32,14 +32,17 @@ func (a *App) readyz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	httpx.WriteJSON(w, r, http.StatusOK, map[string]any{
 		"status": "ok",
 		"checks": map[string]string{"db": "up"},
 	})
 }
 
-func writeJSON(w http.ResponseWriter, status int, body any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(body)
+// noEncontrado atiende lo que ningun patron reclamo.
+//
+// Cuando exista la sesion, el middleware contestara 401 antes de llegar aqui
+// para las rutas protegidas: una ruta inexistente dara 401 sin cookies y 404
+// con ellas. Es esperado, y las pruebas de 404 tendran que autenticar primero.
+func (a *App) noEncontrado(w http.ResponseWriter, r *http.Request) {
+	httpx.WriteProblem(w, r, httpx.NotFound())
 }
