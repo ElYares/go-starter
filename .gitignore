@@ -1,0 +1,17 @@
+# Secretos y entorno
+.env
+
+# Go
+api/tmp/
+api/bin/
+*.test
+
+# Node
+web/node_modules/
+web/.nuxt/
+web/.output/
+web/dist/
+
+# Editores
+.idea/
+.vscode/
