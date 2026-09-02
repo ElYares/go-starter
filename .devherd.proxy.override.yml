@@ -1,0 +1,11 @@
+services:
+  edge:
+    networks:
+      default: {}
+      infra_web:
+        aliases:
+          - go-starter-edge
+
+networks:
+  infra_web:
+    external: true
