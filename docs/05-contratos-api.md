@@ -86,11 +86,18 @@ repiten aquí para que haya una sola fuente.
 
 ## Trampas conocidas
 
+- **Una ruta inexistente también sale como problem+json.** El `404` de omisión de
+  `net/http` es texto plano y rompe la promesa de forma única sin que nadie lo
+  note, porque un 404 «se ve bien» en el navegador. Lo cubre un patrón comodín
+  en el router
 - **El middleware de sesión contesta antes de resolver la ruta.** Una ruta
   inexistente da `401` sin cookies y `404` con ellas. Una prueba de `404` tiene
   que autenticar primero, o afirma un `401` creyendo que afirma un `404`
-- **Los mensajes de validación salen en inglés** si se dejan los de la librería.
-  El `code` de cada `FieldIssue` es lo estable; traducir en el cliente o
-  registrar un traductor en el servidor, pero no las dos cosas
+- **Los mensajes de validación se traducen en el servidor** (`platform/validate`),
+  porque la librería contesta en inglés y nombrando el campo de Go (`DisplayName`)
+  en vez del del contrato (`displayName`) — con eso un cliente resalta el campo
+  equivocado en el formulario. El `code` sigue siendo lo estable: si un fork
+  quiere traducir por su cuenta, tiene con qué. Lo que no se hace es traducir en
+  los dos lados
 - **El token CSRF rota en cada refresh autenticado.** El cliente debe leerlo de
   la cookie en cada petición, no cachearlo al arrancar

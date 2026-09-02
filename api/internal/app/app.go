@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/elyares/go-starter/api/internal/platform/config"
+	"github.com/elyares/go-starter/api/internal/platform/httpx"
 	"github.com/elyares/go-starter/api/internal/platform/observ"
 )
 
@@ -65,6 +66,12 @@ func (a *App) Close() {
 func (a *App) Handler() http.Handler {
 	mux := http.NewServeMux()
 
+	// El comodin va primero por claridad, no por precedencia: ServeMux resuelve
+	// por especificidad, asi que "/" solo atiende lo que ningun patron mas
+	// concreto reclamo. Sin el, una ruta inexistente sale como el 404 de texto
+	// plano de Go y rompe la promesa de que TODO error es problem+json.
+	mux.HandleFunc("/", a.noEncontrado)
+
 	mux.HandleFunc("GET /api/v1/healthz", a.healthz)
 	mux.HandleFunc("GET /api/v1/readyz", a.readyz)
 
@@ -75,7 +82,7 @@ func (a *App) Handler() http.Handler {
 
 	return observ.Chain(mux,
 		observ.TraceID,
-		observ.Recover(a.log),
+		httpx.Recover(a.log),
 		observ.RequestLogger(a.log),
 	)
 }
