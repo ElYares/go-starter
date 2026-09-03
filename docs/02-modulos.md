@@ -40,7 +40,12 @@ func New(deps Deps) *Module { … }
 func (m *Module) Name() string { return "content" }
 
 // Permissions declara los permisos que este módulo inventa.
-// rbac los siembra al arrancar; nadie los escribe a mano en la base.
+// El catálogo lo reconcilia app.SeedPermissions junto a las migraciones;
+// nadie los escribe a mano en la base. Ver 03-modelo-de-datos.md.
+//
+// `Sensitive` marca lo que reparte poder en vez de usarlo: solo el rol
+// `superadmin` lo recibe. Lo decide este módulo porque es el único que
+// sabe qué hace cada permiso suyo.
 func (m *Module) Permissions() []rbac.Permission {
     return []rbac.Permission{
         {Key: "content.page.read",    Desc: "Ver páginas"},
@@ -150,7 +155,9 @@ respuesta correcta es un evento en `platform`, no una interfaz más.
 
 - [ ] `module.go` implementa las cuatro funciones y no exporta nada más
 - [ ] Ningún import de otro `modules/…` (`09-calidad.md` lo verifica)
-- [ ] Sus permisos están declarados, no escritos a mano en una migración
+- [ ] Sus permisos están declarados, no escritos a mano en una migración. Si el
+      módulo además **guarda** el catálogo, implementa `app.CatalogoDePermisos`;
+      solo uno puede hacerlo, y el arranque se niega a sembrar si hay dos
 - [ ] Sus migraciones son locales y con su propia tabla de versiones
 - [ ] Sus endpoints cumplen el molde de [`04-reglas-de-crud.md`](04-reglas-de-crud.md)
 - [ ] Está en `openapi.yaml` y los tipos del frontend están regenerados
