@@ -25,6 +25,41 @@ jobs:
     defaults:
       run:
         working-directory: api
+
+    # Postgres de verdad, y no un doble.
+    #
+    # Las pruebas sin base afirman sobre lo que el service le PIDE al
+    # repositorio; ninguna comprueba que la consulta que se arma sea SQL valido.
+    # El molde de colecciones concatena el 'order by', el 'where' y los
+    # marcadores, asi que un marcador mal numerado pasa todas aquellas y falla
+    # en la primera peticion real.
+    #
+    # Las pruebas de integracion se saltan solas sin DATABASE_URL. Antes de este
+    # servicio se saltaban SIEMPRE, que es la unica forma de tener ocho pruebas
+    # verdes que nunca corrieron.
+    services:
+      db:
+        image: postgres:17
+        env:
+          POSTGRES_DB: starter
+          POSTGRES_USER: starter
+          POSTGRES_PASSWORD: cambiame
+        ports:
+          - 5432:5432
+        # Sin el healthcheck, el primer paso que use la base corre contra un
+        # Postgres que todavia esta arrancando, y falla una vez de cada tres.
+        options: >-
+          --health-cmd "pg_isready -U starter -d starter"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://starter:cambiame@localhost:5432/starter?sslmode=disable
+      # Credencial de usar y tirar, de un servicio que vive lo que dura el
+      # trabajo y no publica nada fuera del runner. config.Load() la exige.
+      JWT_SIGNING_KEY: solo-para-ci-no-es-un-secreto
+
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -46,6 +81,11 @@ jobs:
 
       - name: Vet
         run: go vet ./...
+
+      # Las migraciones las trae cada modulo. Correrlas aqui prueba, de paso,
+      # que el runner de migraciones sigue funcionando de cero.
+      - name: Migraciones
+        run: go run ./cmd/migrate
 
       - name: Pruebas
         # -count=1 desactiva la cache de resultados: en CI queremos la ejecucion
