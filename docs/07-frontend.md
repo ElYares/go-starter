@@ -62,21 +62,36 @@ shared/ui/
   BaseButton.vue     BaseInput.vue     BaseSelect.vue
   BaseDialog.vue     BaseTable.vue     BaseToast.vue
   BaseField.vue      BaseBadge.vue     BaseEmptyState.vue
+  index.ts           ← el único punto de entrada; las vistas importan de aquí
 ```
 
 Ninguna vista importa Reka UI directamente. Si lo hiciera, cambiar de librería
-—o quitarla— sería tocar cincuenta archivos en vez de diez.
+—o quitarla— sería tocar cincuenta archivos en vez de diez. **Es una prueba,
+no una convención:** `test/limites-ui.spec.ts` lee los `.vue` y `.ts` de `app/`
+y falla si alguno fuera de `shared/ui/` menciona `reka-ui`. Es el gemelo de
+`api/internal/app/limites_test.go`, y como aquél, falla también si no leyó
+ningún archivo: un guardia que pasa por vacuidad no guarda nada.
+
+Los `Base*` no usan nada de Nuxt a propósito —importan `ref`, `computed` y
+`useId` desde `vue` de forma explícita—. Eso es lo que permite probarlos con
+`@vue/test-utils` sin levantar el arnés de Nuxt, y lo que deja sacarlos de aquí
+sin arrastrar el framework.
 
 ### Tokens: lo que un fork cambia primero
 
 ```css
 /* assets/tokens/base.css */
 :root {
-  --color-bg: …;         --color-surface: …;
+  --color-bg: …;         --color-surface: …;   --color-surface-hover: …;
   --color-text: …;       --color-text-muted: …;
   --color-accent: …;     --color-accent-strong: …;  --color-on-accent: …;
-  --color-border: …;     --color-danger: …;
-  --font-sans: …;        --radius-md: …;            --space-4: …;
+  --color-border: …;     --color-ok: …;        --color-danger: …;
+  --color-scrim: …;      /* el velo detrás de un diálogo */
+  --font-sans: …;        --font-mono: …;
+  --text-sm: …;          --text-base: …;   --text-lg: …;   --text-display: …;
+  --space-1: … --space-8: …;
+  --radius-sm: …;        --radius-md: …;   --radius-lg: …;  --radius-full: …;
+  --focus-ring: …;
 }
 ```
 
@@ -88,6 +103,18 @@ Dos reglas que ya costaron caro en el proyecto hermano:
 - **Todo token de relleno necesita su par de texto.** `--color-on-accent` existe
   como token, y no como un `#fff` dentro de un botón, porque en tema oscuro el
   par se invierte
+
+Las dos están probadas, y por una razón concreta: `--color-accent` sobre
+`--color-on-accent` en tema claro da **4.53:1**. Tres centésimas de margen. El
+primer fork que meta su color de marca lo rompe, y no hay ningún síntoma visible.
+
+- `test/tokens-contraste.spec.ts` lee el CSS de verdad —no una copia— y mide los
+  17 pares en los dos temas contra 4.5:1. Un fondo nuevo sin su par de texto no
+  es un olvido: es un par que falta en esa lista
+- `test/tokens-sin-literales.spec.ts` falla si un `.vue` de `app/` escribe un
+  color, un espacio o un radio a mano. El grosor de un borde (`1px`) sí se
+  permite: no es un token en ningún sistema, e inventar `--border-1` sería
+  ceremonia que nadie cambia
 
 ## Bloques del CMS
 
@@ -168,6 +195,10 @@ npm run test:run     # nunca 'npm test' a secas: vitest se queda en watch
 npm run typecheck
 npm run build        # no es redundante: resuelve los imports diferidos de rutas
 ```
+
+Vitest corre en `environment: 'node'` por omisión: las pruebas de lógica pura no
+necesitan DOM y arrancan antes sin él. Las de componentes piden el suyo archivo
+por archivo, con `// @vitest-environment happy-dom` en la primera línea.
 
 Todo `npm` va por `docker exec` y el workdir del contenedor es `/workspace`:
 
