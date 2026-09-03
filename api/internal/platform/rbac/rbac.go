@@ -20,6 +20,16 @@ import (
 type Permission struct {
 	Key  string
 	Desc string
+
+	// Sensitive marca lo que reparte poder en vez de usarlo: crear cuentas,
+	// asignar roles, conceder permisos. Solo el rol `superadmin` los recibe al
+	// sembrar; el rol `admin` recibe el resto.
+	//
+	// Lo decide el modulo que inventa el permiso porque es el unico que sabe
+	// que hace. Una lista en la siembra —"todo lo que empiece por identity."—
+	// obligaria a editarla desde fuera cada vez que un fork agrega un dominio
+	// con operaciones delicadas propias.
+	Sensitive bool
 }
 
 // Actor es quien hace la peticion. En la fase 1 solo lo inyectan las pruebas;

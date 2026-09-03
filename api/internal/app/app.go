@@ -64,9 +64,14 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		if err := RunMigrations(ctx, cfg, log, pool); err != nil {
 			return nil, fmt.Errorf("migrando: %w", err)
 		}
+		// Pegada a las migraciones a proposito, no en cada arranque: ver el
+		// comentario de SeedPermissions.
+		if err := SeedPermissions(ctx, cfg, log, pool); err != nil {
+			return nil, fmt.Errorf("sembrando permisos: %w", err)
+		}
 	}
 
-	if err := a.montar(Modules(pool)); err != nil {
+	if err := a.montar(Modules(cfg, pool)); err != nil {
 		return nil, err
 	}
 
@@ -80,12 +85,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 // una clave mal escrita se veria en produccion como un 403 permanente e
 // inexplicable, porque el guard rechazaria a todos, incluido el admin.
 func (a *App) montar(mods []Module) error {
-	var perms []rbac.Permission
-	for _, m := range mods {
-		perms = append(perms, m.Permissions()...)
-	}
-
-	reg, err := rbac.NewRegistry(perms)
+	reg, err := rbac.NewRegistry(permisosDe(mods))
 	if err != nil {
 		return err
 	}

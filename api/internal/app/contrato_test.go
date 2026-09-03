@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/elyares/go-starter/api/internal/modules/identity"
 	"github.com/elyares/go-starter/api/internal/modules/settings"
 	"github.com/elyares/go-starter/api/internal/platform/httpx"
 )
@@ -15,7 +16,10 @@ func rutasDeTodo(t *testing.T) []httpx.Route {
 	t.Helper()
 
 	a := &App{log: loggerDePrueba()}
-	if err := a.montar([]Module{settings.New(nil)}); err != nil {
+	// identity no monta rutas todavia —su superficie HTTP es de CU-001 en
+	// adelante— pero va en la lista igual: el dia que las monte, estas pruebas
+	// las miran sin que nadie tenga que acordarse de agregarlo aqui.
+	if err := a.montar([]Module{identity.New(nil, true), settings.New(nil)}); err != nil {
 		t.Fatalf("montar: %v", err)
 	}
 	return a.router.Routes()

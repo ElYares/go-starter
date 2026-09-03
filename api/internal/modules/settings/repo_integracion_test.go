@@ -25,10 +25,15 @@ import (
 // marcador mal numerado pasa todas aquellas y falla en la primera peticion
 // real.
 //
-// Se saltan solas sin DATABASE_URL, que es el caso de CI: ahi no hay base. Para
-// correrlas:
+// Se saltan solas sin DATABASE_URL. Para correrlas hace falta la base del
+// stack local, asi que van dentro del contenedor:
 //
-//	devherd exec go-starter api -- go test ./internal/modules/settings/ -run Integracion -v
+//	docker exec -w /workspace devherd-go-starter-<hash>-api-1 \
+//	    go test ./internal/modules/settings/ -run Integracion -v
+//
+// `devherd exec` no existe: devherd no tiene ese subcomando. Y el `sh -lc` que
+// uno escribe por costumbre tampoco sirve, porque el shell de login rehace el
+// PATH y deja fuera /usr/local/go/bin.
 func pool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 
