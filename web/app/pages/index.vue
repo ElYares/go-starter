@@ -1,15 +1,11 @@
 <script setup lang="ts">
 import { useApiFetch } from '~/shared/api/useApiFetch'
-
-interface Readiness {
-  status: string
-  checks: Record<string, string>
-}
+import type { Schemas } from '~/shared/api/generated'
 
 // Esta peticion sale desde el SERVIDOR de Nuxt hacia la red interna del
 // compose. Es la prueba de la fase 0: si el texto de abajo aparece en el HTML
 // que devuelve curl, el cableado completo funciona.
-const { data, error } = await useApiFetch<Readiness>('/readyz')
+const { data, error } = await useApiFetch<Schemas['Readiness']>('/readyz')
 
 useHead({
   title: 'go-starter',
