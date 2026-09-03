@@ -8,6 +8,7 @@ package httpx
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -127,4 +128,33 @@ func TooManyRequests(detail string) *Problem {
 func Internal() *Problem {
 	return New(http.StatusInternalServerError, CodeInternal, "Error interno",
 		"Algo fallo de nuestro lado. El traceId identifica esta peticion en el log")
+}
+
+// Problemas de parametro. Existen aqui, y no en cada modulo, porque el codigo
+// que genera oapi-codegen deja sus tipos de error DENTRO del paquete de cada
+// modulo: el `switch` que los distingue no se puede compartir, pero el texto de
+// la respuesta si, y es lo que tiene que ser igual en toda la API.
+
+func ParamRequired(name string) *Problem {
+	return BadRequest(fmt.Sprintf("Falta el parametro %q", name), FieldIssue{
+		Field: name, Code: "required", Message: "Este parametro es obligatorio",
+	})
+}
+
+func ParamType(name string) *Problem {
+	return BadRequest(
+		fmt.Sprintf("El parametro %q no tiene el tipo que declara el contrato", name),
+		FieldIssue{Field: name, Code: "type", Message: "El valor no tiene el tipo esperado"})
+}
+
+func ParamRepeated(name string) *Problem {
+	return BadRequest(fmt.Sprintf("El parametro %q llego repetido", name), FieldIssue{
+		Field: name, Code: "repeated", Message: "Este parametro solo acepta un valor",
+	})
+}
+
+// ParamInvalid es el caso que no encaja en los anteriores. Sigue siendo culpa
+// de la peticion, no nuestra: 400, no 500.
+func ParamInvalid() *Problem {
+	return BadRequest("Los parametros de la peticion no son validos")
 }

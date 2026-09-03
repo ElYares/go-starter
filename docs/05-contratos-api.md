@@ -2,14 +2,58 @@
 
 ## El contrato es la fuente
 
-`api/openapi.yaml` se escribe **a mano y primero**. De ahí salen dos cosas
+`api/openapi.yaml` se escribe **a mano y primero**. De ahí salen las dos mitades
 generadas, y ninguna se edita:
 
 ```
 api/openapi.yaml
-   ├─ oapi-codegen        → api/internal/app/openapi_gen.go   (interfaces del servidor)
-   └─ openapi-typescript  → web/app/shared/api/generated/      (tipos del cliente)
+   ├─ oapi-codegen        → un openapi_gen.go POR MÓDULO
+   │                        api/internal/app/openapi_gen.go              (tag: salud)
+   │                        api/internal/modules/settings/openapi_gen.go (tag: settings)
+   └─ openapi-typescript  → web/app/shared/api/generated/schema.ts
 ```
+
+**Uno por módulo, no uno global.** Sin filtrar, `oapi-codegen` emite una sola
+`ServerInterface` con *todas* las operaciones del contrato, y entonces un único
+struct tendría que implementar las de salud, las de `settings` y las de cada
+módulo futuro. Eso obligaría a `app` a conocer cada operación, y es justo lo que
+prohíbe la Decisión 002.
+
+Lo que lo hace posible es `output-options.include-tags`, y por eso **cada
+operación del contrato lleva el tag de su módulo**. Un tag mal puesto no falla:
+simplemente deja la operación fuera de lo generado, y el módulo no la implementa.
+
+Regenerar:
+
+```sh
+cd api && go generate ./...                    # el lado de Go
+docker exec <web> sh -c 'npm run generate:api' # el lado de TypeScript
+```
+
+El contrato se monta en el contenedor de `web` como `/api/openapi.yaml`, para que
+la ruta relativa `../api/openapi.yaml` valga igual dentro que fuera. En CI no hay
+compose, y el script tiene que funcionar igual.
+
+### Lo generado se monta a mano
+
+`oapi-codegen` también genera el registro de rutas (`HandlerWithOptions`).
+**No se usa.** Monta sobre un mux con middleware global para todas las
+operaciones, y con eso se perdería el permiso declarado por ruta, `Route.Permission`
+y la comprobación de arranque que se niega a levantar si una ruta exige un
+permiso que ningún módulo declara.
+
+En su lugar se montan los métodos de `ServerInterfaceWrapper` —que son
+`http.HandlerFunc` normales: enlazan los parámetros del contrato y llaman a la
+interfaz— sobre el router propio, ruta por ruta:
+
+```go
+w := &ServerInterfaceWrapper{Handler: m, ErrorHandlerFunc: errorDeParametro}
+r.Get("", w.ListarSettings, rbac.Require("settings.read"))
+```
+
+`ErrorHandlerFunc` **no es opcional**: el de omisión responde con `http.Error`,
+texto plano y sin `traceId`, y rompe la promesa de forma única justo en el error
+más frecuente. Es el mismo agujero que el `404` de omisión de `net/http`.
 
 Por qué en ese sentido y no al revés (generar el spec desde anotaciones del
 código): un spec generado documenta lo que el código hace hoy, así que nunca
@@ -17,9 +61,15 @@ puede estar en desacuerdo con él — y por lo tanto **nunca avisa de un cambio
 incompatible**. Escrito a mano, cambiar el contrato es un acto deliberado que
 se ve en el diff.
 
-Los tipos generados **se versionan en git**. Nadie comprueba automáticamente que
-estén al día: si el spec cambió y el `generated/` no, el frontend compila contra
-un contrato que ya no existe. Regenerar es parte de la definición de "hecho".
+Los tipos generados **se versionan en git**, y el CI los regenera y falla si el
+diff no está vacío: el paso `Contrato al día` existe en los trabajos `api` y
+`web`. Sin eso, un spec cambiado sin regenerar pasa en verde y el frontend
+compila contra un contrato que ya no existe.
+
+Lo que el CI **no** puede comprobar es que los patrones montados en `Routes()`
+sean los del contrato, porque se escriben a mano. Eso lo cubre una prueba que le
+pregunta al propio código generado qué rutas describe, con un mux espía. Ver
+`internal/modules/settings/contrato_test.go`.
 
 ## Sesión: cookies, no cabeceras
 

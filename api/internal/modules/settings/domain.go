@@ -1,46 +1,22 @@
 package settings
 
 import (
-	"encoding/json"
 	"regexp"
-	"time"
 
 	"github.com/elyares/go-starter/api/internal/platform/httpx"
 )
 
-// Setting es una clave de configuracion. `Value` viaja como JSON crudo: el
-// esquema por clave se valida en la fase 4, y hasta entonces no tiene sentido
-// inventarle un tipo de Go que no representa nada.
-type Setting struct {
-	Key       string          `json:"key"`
-	Value     json.RawMessage `json:"value"`
-	IsPublic  bool            `json:"isPublic"`
-	Version   int             `json:"version"`
-	UpdatedAt time.Time       `json:"updatedAt"`
-	// UpdatedBy es nulo en las filas que sembro la migracion inicial: nadie las
-	// escribio. De ahi en adelante lo llena platform/audit y no vuelve a serlo.
-	UpdatedBy *string `json:"updatedBy"`
-}
-
-// entrada es el DTO de alta. Es explicito y separado de Setting a proposito:
-// decodificar el cuerpo directamente sobre la entidad es mass assignment, y
-// regalaria `version`, `updatedAt` y `updatedBy` al cliente.
-type entrada struct {
-	Key      string          `json:"key"`
-	Value    json.RawMessage `json:"value"`
-	IsPublic bool            `json:"isPublic"`
-}
-
-// modificacion es el DTO de reemplazo. No trae `key`: la clave es la identidad
-// del recurso y viaja en la ruta. Aceptarla en el cuerpo abriria la puerta a un
-// PUT que renombra la fila que estaba editando otro.
-type modificacion struct {
-	Value    json.RawMessage `json:"value"`
-	IsPublic bool            `json:"isPublic"`
-}
+// Los tipos de este modulo —Setting, SettingNuevo, SettingModificacion,
+// SettingsPage— YA NO SE ESCRIBEN AQUI. Salen de api/openapi.yaml y viven en
+// openapi_gen.go. Ver docs/05-contratos-api.md y la Decision 010.
+//
+// Lo que queda en este archivo es lo que el contrato no puede expresar: reglas
+// de validacion con mensajes propios. OpenAPI declara el `pattern` de la clave,
+// pero un `pattern` incumplido no dice al usuario que se acepta y que no.
 
 // Una clave es un identificador, no texto libre: se usa en el frontend como
-// nombre de propiedad y aparece en URLs.
+// nombre de propiedad y aparece en URLs. El patron es el mismo que declara el
+// contrato; si uno cambia, tiene que cambiar el otro.
 var claveValida = regexp.MustCompile(`^[a-z0-9]+([._-][a-z0-9]+)*$`)
 
 func validarClave(k string) *httpx.Problem {
@@ -62,11 +38,19 @@ func validarClave(k string) *httpx.Problem {
 	return nil
 }
 
-func validarValor(v json.RawMessage) *httpx.Problem {
-	if len(v) == 0 {
+// validarValor trata el JSON `null` como ausente. El contrato declara `value`
+// obligatorio, y una clave de configuracion cuyo valor es null no configura
+// nada: distinguir "no lo mandaste" de "lo mandaste vacio" aqui no le sirve a
+// nadie.
+func validarValor(v interface{}) *httpx.Problem {
+	if v == nil {
 		return httpx.BadRequest("El valor es obligatorio", httpx.FieldIssue{
 			Field: "value", Code: "required", Message: "Este campo es obligatorio",
 		})
 	}
 	return nil
 }
+
+// publico resuelve el *bool del contrato. Ausente significa privado: que una
+// clave sea publica es una decision explicita, nunca un valor por omision.
+func publico(p *bool) bool { return p != nil && *p }

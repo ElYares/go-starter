@@ -76,6 +76,20 @@ jobs:
             echo "Archivos sin formatear:"; echo "$sin_formato"; exit 1
           fi
 
+      # El contrato es la fuente. Si el spec cambio y lo generado no, el codigo
+      # compila contra un contrato que ya no existe, y eso no se nota hasta
+      # produccion. Aqui se regenera y se exige que no cambie ni un byte.
+      - name: Contrato al dia
+        run: |
+          go generate ./...
+          sucio=$(git status --porcelain)
+          if [ -n "$sucio" ]; then
+            echo "Lo generado no coincide con api/openapi.yaml. Corre 'go generate ./...' desde api/ y commitea:"
+            echo "$sucio"
+            git diff
+            exit 1
+          fi
+
       - name: Build
         run: go build ./...
 
@@ -108,6 +122,20 @@ jobs:
 
       - run: npm ci
 
+      # La otra mitad del contrato. Misma razon que en el trabajo `api`: un spec
+      # cambiado sin regenerar deja al frontend compilando contra tipos que ya
+      # no describen la API.
+      - name: Contrato al dia
+        run: |
+          npm run generate:api
+          sucio=$(git status --porcelain)
+          if [ -n "$sucio" ]; then
+            echo "Los tipos no coinciden con api/openapi.yaml. Corre 'npm run generate:api' y commitea:"
+            echo "$sucio"
+            git diff
+            exit 1
+          fi
+
       # 'test:run', nunca 'npm test' a secas: vitest se queda en watch y cuelga
       # el runner hasta el timeout.
       - name: Pruebas
@@ -133,7 +161,7 @@ jobs:
       - name: Lint del contrato
         run: npx --yes @redocly/cli@latest lint api/openapi.yaml
 
-      # Pendiente de HU-006: cuando existan los tipos generados, este trabajo
-      # tiene que regenerarlos y fallar si el diff no esta vacio. Sin eso, un
-      # spec cambiado sin regenerar pasa en verde y el frontend compila contra
-      # un contrato que ya no existe.
+      # La regeneracion NO va aqui: cada lado la comprueba en su propio trabajo
+      # —`api` con `go generate`, `web` con `npm run generate:api`— porque cada
+      # uno ya tiene su toolchain montada. Este trabajo solo valida el contrato
+      # en si, y por eso no necesita ni Go ni las dependencias del frontend.

@@ -34,18 +34,24 @@ func (s *Service) Todas(ctx context.Context) ([]Setting, error) {
 
 // Pagina valida la query contra la lista blanca ANTES de tocar la base. Un sort
 // invalido no llega nunca a ser SQL, y por eso es un 400 y no un 500.
-func (s *Service) Pagina(ctx context.Context, q url.Values) (paging.Page[Setting], error) {
+func (s *Service) Pagina(ctx context.Context, q url.Values) (SettingsPage, error) {
 	p, prob := listado.Parse(q)
 	if prob != nil {
-		return paging.Page[Setting]{}, prob
+		return SettingsPage{}, prob
 	}
 
 	items, total, err := s.repo.pagina(ctx, p)
 	if err != nil {
-		return paging.Page[Setting]{}, err
+		return SettingsPage{}, err
 	}
 
-	return paging.NewPage(items, p, total), nil
+	pagina := paging.NewPage(items, p, total)
+
+	// La conversion de paging.Meta a PageMeta es lo que ata el molde al
+	// contrato, y lo hace EN TIEMPO DE COMPILACION: Go solo permite convertir
+	// entre structs con los mismos campos y tipos. Si el contrato le agrega un
+	// campo a `page`, o le cambia el tipo a uno, esta linea deja de compilar.
+	return SettingsPage{Content: pagina.Content, Page: PageMeta(pagina.Page)}, nil
 }
 
 func (s *Service) Leer(ctx context.Context, key string) (Setting, error) {
@@ -53,7 +59,7 @@ func (s *Service) Leer(ctx context.Context, key string) (Setting, error) {
 	return item, traducirEstado(err)
 }
 
-func (s *Service) Crear(ctx context.Context, e entrada) (Setting, error) {
+func (s *Service) Crear(ctx context.Context, e SettingNuevo) (Setting, error) {
 	if prob := validarClave(e.Key); prob != nil {
 		return Setting{}, prob
 	}
@@ -61,14 +67,14 @@ func (s *Service) Crear(ctx context.Context, e entrada) (Setting, error) {
 		return Setting{}, prob
 	}
 
-	creada, err := s.repo.crear(ctx, Setting{Key: e.Key, Value: e.Value, IsPublic: e.IsPublic})
+	creada, err := s.repo.crear(ctx, Setting{Key: e.Key, Value: e.Value, IsPublic: publico(e.IsPublic)})
 	return creada, traducirEstado(err)
 }
 
 // Reemplazar exige la version que el cliente creia estar editando. Si en la
 // base hay otra, alguien guardo en medio y la respuesta es 409, no un guardado
 // que borra el trabajo ajeno en silencio.
-func (s *Service) Reemplazar(ctx context.Context, key string, version int, m modificacion) (Setting, error) {
+func (s *Service) Reemplazar(ctx context.Context, key string, version int, m SettingModificacion) (Setting, error) {
 	if prob := validarValor(m.Value); prob != nil {
 		return Setting{}, prob
 	}
@@ -76,7 +82,7 @@ func (s *Service) Reemplazar(ctx context.Context, key string, version int, m mod
 	actualizada, err := s.repo.actualizar(ctx, Setting{
 		Key:      key,
 		Value:    m.Value,
-		IsPublic: m.IsPublic,
+		IsPublic: publico(m.IsPublic),
 		Version:  version,
 	})
 	return actualizada, traducirEstado(err)

@@ -2,6 +2,7 @@ package settings
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"github.com/elyares/go-starter/api/internal/platform/audit"
 	"github.com/elyares/go-starter/api/internal/platform/paging"
@@ -131,7 +133,12 @@ func (r *Repo) crear(ctx context.Context, s Setting) (Setting, error) {
 		  returning %s`,
 		sello.ColumnList(), sello.Placeholders(4), columnas)
 
-	args := append([]any{s.Key, s.Value, s.IsPublic}, sello.Values...)
+	crudo, err := valorParaGuardar(s.Value)
+	if err != nil {
+		return Setting{}, err
+	}
+
+	args := append([]any{s.Key, crudo, s.IsPublic}, sello.Values...)
 
 	rows, err := r.pool.Query(ctx, q, args...)
 	if err != nil {
@@ -159,7 +166,12 @@ func (r *Repo) actualizar(ctx context.Context, s Setting) (Setting, error) {
 		  returning %s`,
 		sello.Assignments(5), columnas)
 
-	args := append([]any{s.Value, s.IsPublic, s.Key, s.Version}, sello.Values...)
+	crudo, err := valorParaGuardar(s.Value)
+	if err != nil {
+		return Setting{}, err
+	}
+
+	args := append([]any{crudo, s.IsPublic, s.Key, s.Version}, sello.Values...)
 
 	rows, err := r.pool.Query(ctx, q, args...)
 	if err != nil {
@@ -188,19 +200,39 @@ func (r *Repo) porQueNoCuadro(ctx context.Context, key string) error {
 	return errVersion
 }
 
+// escanear traduce una fila a la forma que dicta el contrato.
+//
+// `value` se lee como bytes y se deserializa aqui: el contrato lo declara como
+// JSON libre, asi que del otro lado es un interface{}. Pasar por []byte en vez
+// de dejar que el driver adivine mantiene el control de que se acepta.
 func escanear(row pgx.CollectableRow) (Setting, error) {
 	var (
-		s  Setting
-		by pgtype.UUID
+		s     Setting
+		crudo []byte
+		by    pgtype.UUID
 	)
-	if err := row.Scan(&s.Key, &s.Value, &s.IsPublic, &s.Version, &s.UpdatedAt, &by); err != nil {
+	if err := row.Scan(&s.Key, &crudo, &s.IsPublic, &s.Version, &s.UpdatedAt, &by); err != nil {
 		return Setting{}, err
 	}
+	if err := json.Unmarshal(crudo, &s.Value); err != nil {
+		return Setting{}, fmt.Errorf("settings: la clave %q tiene un valor que no es JSON: %w", s.Key, err)
+	}
 	if by.Valid {
-		quien := by.String()
+		quien := openapi_types.UUID(by.Bytes)
 		s.UpdatedBy = &quien
 	}
 	return s, nil
+}
+
+// valorParaGuardar deja el JSON en bytes antes de que salga del proceso. Sin
+// esto el driver serializa por su cuenta un interface{}, y lo que acabe en la
+// columna depende de como lo interprete, no de lo que diga el contrato.
+func valorParaGuardar(v interface{}) ([]byte, error) {
+	crudo, err := json.Marshal(v)
+	if err != nil {
+		return nil, fmt.Errorf("settings: el valor no se puede serializar: %w", err)
+	}
+	return crudo, nil
 }
 
 // traducir convierte la violacion de unicidad de Postgres en el sentinela del
