@@ -84,6 +84,23 @@ Otros puntos que ya dolieron en el proyecto hermano y aplican igual aquí:
 - **La base desde un gestor gráfico:** la IP sale de
   `docker inspect devherd-go-starter-<hash>-db-1`. Cambia en cada `down`+`up`
 
+## Migraciones
+
+```sh
+# desarrollo: las aplica el servidor al arrancar (MIGRATE_ON_START=true en el compose)
+devherd logs | grep "migracion aplicada"
+
+# a mano, o como paso de despliegue
+docker exec <contenedor-api> go run ./cmd/migrate
+```
+
+Cada módulo lleva **su propia tabla de versiones**, `schema_migrations_<módulo>`.
+Verlas es la forma rápida de saber qué módulos tienen esquema aplicado:
+
+```sh
+docker exec <contenedor-db> psql -U starter -d starter -c '\dt'
+```
+
 ## Variables de entorno
 
 Un solo `.env` en la raíz, **sin valores por omisión para secretos**. Una clave

@@ -28,6 +28,8 @@ security:
 tags:
   - name: salud
     description: Estado del proceso y de sus dependencias
+  - name: settings
+    description: "Configuracion del sitio: marca, navegacion, pie, tema"
 
 paths:
   /healthz:
@@ -81,6 +83,50 @@ paths:
         "500":
           $ref: "#/components/responses/Problem"
 
+  /public/settings:
+    get:
+      tags: [settings]
+      summary: La configuracion publica del sitio
+      description: |
+        Devuelve **solo** las claves marcadas como publicas. El filtro se
+        resuelve en la consulta, no en el cliente: aqui viven tambien llaves de
+        terceros y correos internos.
+
+        La consume el renderizado en servidor de la landing en cada carga.
+      operationId: listarSettingsPublicas
+      security: []
+      responses:
+        "200":
+          description: Un objeto plano de clave a valor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsMap"
+              example:
+                site.brand: { name: go-starter, tagline: Landing publica editable desde un dashboard }
+                site.nav: [{ label: Inicio, href: "/" }]
+        "500":
+          $ref: "#/components/responses/Problem"
+
+  /settings:
+    get:
+      tags: [settings]
+      summary: Toda la configuracion, incluidas las claves privadas
+      operationId: listarSettings
+      responses:
+        "200":
+          description: Un objeto plano de clave a valor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsMap"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -122,6 +168,14 @@ components:
         traceId:
           type: string
           description: Presente cuando algo fallo. Es lo que se busca en el log.
+
+    SettingsMap:
+      description: |
+        Clave a valor. El valor es JSON libre: el esquema por clave se valida en
+        el servidor a partir de la fase 4, y hasta entonces darle un tipo aqui
+        seria describir algo que nadie comprueba.
+      type: object
+      additionalProperties: true
 
     Problem:
       description: |

@@ -14,11 +14,10 @@ import (
 // 404 de omision de net/http es texto plano y la rompe sin que nadie lo note,
 // porque un 404 "se ve bien" en el navegador.
 func TestUnaRutaInexistenteContestaProblemJson(t *testing.T) {
-	a := &App{log: loggerDePrueba()}
-	srv := a.Handler()
+	a := appDePrueba(t)
 
 	rec := httptest.NewRecorder()
-	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/no-existe", nil))
+	a.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/no-existe", nil))
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("estado = %d, se esperaba 404", rec.Code)
@@ -38,7 +37,7 @@ func TestUnaRutaInexistenteContestaProblemJson(t *testing.T) {
 
 func TestHealthzRespondeSinTocarLaBase(t *testing.T) {
 	// pool en nil a proposito: si healthz consultara la base, esto reventaria.
-	a := &App{log: loggerDePrueba()}
+	a := appDePrueba(t)
 
 	rec := httptest.NewRecorder()
 	a.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/healthz", nil))

@@ -138,10 +138,18 @@ no un detalle: ver `04-reglas-de-crud.md`.
 settings (
   key text pk,                          -- 'site.brand', 'site.nav', 'site.theme'
   value jsonb not null,
+  is_public boolean not null default false,
   version int not null default 1,
-  updated_at, updated_by
+  created_at, created_by, updated_at, updated_by
 )
+
+create index settings_publicas_idx on settings (key) where is_public;
 ```
+
+**`is_public` no es un extra:** `/api/v1/public/settings` sólo devuelve las
+claves marcadas, y el filtro se resuelve **en la consulta**. Aquí viven también
+llaves de terceros y correos internos, así que el default es privado: abrir una
+clave al mundo es una decisión, no un descuido.
 
 Clave-valor con esquema por clave, validado como los bloques. Es donde vive lo
 que el fork cambia sin tocar código: nombre, logo, colores, menú, pie, redes.

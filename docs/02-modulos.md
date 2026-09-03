@@ -51,8 +51,18 @@ func (m *Module) Permissions() []rbac.Permission {
 
 // Migrations son las suyas, embebidas. Ver "Migraciones" abajo.
 //go:embed migrations/*.sql
-var migrations embed.FS
-func (m *Module) Migrations() fs.FS { return migrations }
+var migrationsFS embed.FS
+
+// El fs.Sub no es adorno: goose espera los .sql en la RAÍZ del sistema de
+// archivos que recibe, y el embed los deja bajo `migrations/`. Sin recortar el
+// prefijo no encuentra ninguna y no aplica nada — sin error.
+func (m *Module) Migrations() fs.FS {
+    sub, err := fs.Sub(migrationsFS, "migrations")
+    if err != nil {
+        panic("content: migrations/ no esta embebido: " + err.Error())
+    }
+    return sub
+}
 
 // Routes es el único lugar donde este módulo aparece en el router.
 func (m *Module) Routes(r *httpx.Router) {
@@ -103,6 +113,13 @@ tiene que borrar también su esquema del repositorio.
   el orden de dos módulos independientes se vuelve global y frágil
 - El runner de `platform/db` recorre los módulos en el orden del registro y
   aplica lo pendiente de cada uno
+- **Migrar es un paso explícito**, no un efecto secundario de arrancar: en
+  producción va `cmd/migrate`, porque dos réplicas migrando a la vez es una
+  carrera. En desarrollo `MIGRATE_ON_START=true` lo hace el propio servidor, y el
+  compose ya lo trae puesto
+- **`platform/db` no conoce el tipo `Module`.** Declara su propia interfaz
+  `Migratable` (nombre + migraciones) del lado del consumidor: importar `app`
+  sería un import hacia arriba y rompería la regla 1
 
 **La trampa:** una migración que transforma datos pasa siempre si corre contra
 una base vacía — no hay filas que transformar. Para probarla de verdad hay que
