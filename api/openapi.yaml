@@ -29,7 +29,12 @@ tags:
   - name: salud
     description: Estado del proceso y de sus dependencias
   - name: settings
-    description: "Configuracion del sitio: marca, navegacion, pie, tema"
+    description: |
+      Configuracion del sitio: marca, navegacion, pie, tema.
+
+      **No hay DELETE, y es deliberado.** El codigo de la landing lee claves por
+      nombre, asi que borrar una no deja un hueco sino una pantalla rota, y sin
+      rastro de que hubo algo ahi. Una clave que sobra se apaga con su valor.
 
 paths:
   /healthz:
@@ -111,18 +116,191 @@ paths:
   /settings:
     get:
       tags: [settings]
-      summary: Toda la configuracion, incluidas las claves privadas
+      summary: Listar la configuracion, incluidas las claves privadas
+      description: |
+        Sigue el molde de coleccion de `docs/04-reglas-de-crud.md` seccion 3:
+        envoltorio fijo `{content, page}`, nunca un array en la raiz.
+
+        `size` tiene un **tope duro de 100**. Pedir mas no es un error: se
+        devuelve el maximo, y `page.size` reporta el tamano **efectivo**.
+
+        El orden y el filtro van por lista blanca. Un campo que no este en ella
+        es `400`, no un `500` con un error de SQL.
+
+        La consume el dashboard. La landing usa `/public/settings`, que devuelve
+        un mapa plano porque necesita la configuracion entera en cada carga.
       operationId: listarSettings
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+        - name: sort
+          in: query
+          description: |
+            `campo,dir` con `dir` en `asc` (por omision) o `desc`. Se puede
+            repetir para ordenar por varios criterios. Todo orden termina con un
+            desempate estable por `key`: sin el, dos filas con el mismo
+            `updatedAt` se repiten o se pierden entre paginas.
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - key
+                - key,asc
+                - key,desc
+                - updatedAt
+                - updatedAt,asc
+                - updatedAt,desc
+          example: ["updatedAt,desc"]
+        - name: isPublic
+          in: query
+          description: Filtra por visibilidad. Es el unico filtro declarado.
+          required: false
+          schema:
+            type: boolean
       responses:
         "200":
-          description: Un objeto plano de clave a valor
+          description: Una pagina de claves
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SettingsMap"
+                $ref: "#/components/schemas/SettingsPage"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "403":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+    post:
+      tags: [settings]
+      summary: Crear una clave de configuracion
+      description: |
+        La clave es la identidad del recurso: minusculas, numeros y los
+        separadores `.` `_` `-` entre ellos. Repetirla es `409`.
+      operationId: crearSetting
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingNuevo"
+      responses:
+        "201":
+          description: Creada
+          headers:
+            Location:
+              description: URL de la clave recien creada
+              schema:
+                type: string
+              example: /api/v1/settings/site.footer
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Setting"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+  /settings/{key}:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        description: La clave, por ejemplo `site.brand`.
+        schema:
+          type: string
+          maxLength: 120
+          pattern: "^[a-z0-9]+([._-][a-z0-9]+)*$"
+        example: site.brand
+
+    get:
+      tags: [settings]
+      summary: Leer una clave
+      description: |
+        Devuelve el `ETag` que hay que mandar en `If-Match` para modificarla.
+      operationId: leerSetting
+      responses:
+        "200":
+          description: La clave
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Setting"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+    put:
+      tags: [settings]
+      summary: Reemplazar el valor de una clave
+      description: |
+        `If-Match` es **obligatorio** y lleva el `ETag` de la lectura. Si en la
+        base hay otra version, alguien guardo en medio y la respuesta es `409`.
+
+        Sin esto, dos personas editando la misma clave desde el dashboard
+        producen que la ultima en guardar borre el trabajo de la otra, en
+        silencio y sin rastro.
+
+        La cabecera ausente sale como `400 VALIDATION_FAILED` nombrando
+        `If-Match`: la tabla de codigos de la seccion 2 del molde es normativa y
+        no contempla `428`.
+      operationId: reemplazarSetting
+      parameters:
+        - name: If-Match
+          in: header
+          required: true
+          description: El `ETag` que devolvio la lectura. `*` no se acepta.
+          schema:
+            type: string
+          example: "\"7\""
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingModificacion"
+      responses:
+        "200":
+          description: Actualizada
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Setting"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
           $ref: "#/components/responses/Problem"
         "500":
           $ref: "#/components/responses/Problem"
@@ -135,6 +313,40 @@ components:
       type: apiKey
       in: cookie
       name: at
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      description: Numero de pagina, base 0.
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+
+    Size:
+      name: size
+      in: query
+      required: false
+      description: |
+        Tamano de pagina. El tope es **duro**: pedir mas devuelve 100 y
+        `page.size` reporta el efectivo. Sin el, `?size=1000000` seria una
+        negacion de servicio de una linea.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  headers:
+    ETag:
+      description: |
+        La version del recurso. Es lo que se manda en `If-Match` para
+        modificarlo sin pisar el cambio de otra persona.
+      schema:
+        type: string
+      example: "\"7\""
 
   responses:
     Problem:
@@ -176,6 +388,94 @@ components:
         seria describir algo que nadie comprueba.
       type: object
       additionalProperties: true
+
+    PageMeta:
+      description: |
+        Los metadatos de una pagina. `size` es el tamano EFECTIVO: si el cliente
+        pidio un millon, aqui dice 100.
+      type: object
+      required: [number, size, totalElements, totalPages]
+      properties:
+        number: { type: integer, minimum: 0, example: 0 }
+        size: { type: integer, minimum: 1, maximum: 100, example: 20 }
+        totalElements: { type: integer, format: int64, minimum: 0, example: 137 }
+        totalPages: { type: integer, minimum: 0, example: 7 }
+
+    Setting:
+      type: object
+      required: [key, value, isPublic, version, updatedAt, updatedBy]
+      properties:
+        key:
+          type: string
+          maxLength: 120
+          pattern: "^[a-z0-9]+([._-][a-z0-9]+)*$"
+          example: site.brand
+        value:
+          description: |
+            JSON libre. El esquema por clave se valida en el servidor a partir
+            de la fase 4, y hasta entonces darle un tipo aqui seria describir
+            algo que nadie comprueba.
+          example: { name: go-starter }
+        isPublic:
+          type: boolean
+          description: |
+            Que una clave sea publica es una decision explicita. Por omision es
+            privada: aqui viven tambien llaves de terceros y correos internos.
+          default: false
+        version:
+          type: integer
+          minimum: 1
+          description: Se devuelve tambien como `ETag`.
+          example: 7
+        updatedAt: { type: string, format: date-time }
+        updatedBy:
+          type: [string, "null"]
+          format: uuid
+          description: |
+            Lo llena la plataforma, no el codigo de negocio. Es nulo solo en las
+            filas que sembro la migracion inicial: nadie las escribio.
+
+    SettingsPage:
+      description: |
+        El envoltorio de toda coleccion de esta API. Nunca un array pelado en la
+        raiz: agregar metadatos despues rompe a todos los clientes a la vez. Una
+        coleccion vacia sale como `[]`, jamas como `null`.
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/Setting"
+        page:
+          $ref: "#/components/schemas/PageMeta"
+
+    SettingNuevo:
+      description: |
+        El cuerpo de alta. No acepta `version` ni `updatedBy`: no son del
+        cliente, y mandarlos es un `400` y no un campo ignorado en silencio.
+      type: object
+      required: [key, value]
+      additionalProperties: false
+      properties:
+        key:
+          type: string
+          maxLength: 120
+          pattern: "^[a-z0-9]+([._-][a-z0-9]+)*$"
+        value: {}
+        isPublic: { type: boolean, default: false }
+
+    SettingModificacion:
+      description: |
+        El cuerpo de reemplazo. No trae `key`: la clave es la identidad del
+        recurso y viaja en la ruta. Aceptarla aqui abriria la puerta a un `PUT`
+        que renombra la fila que estaba editando otro.
+      type: object
+      required: [value]
+      additionalProperties: false
+      properties:
+        value: {}
+        isPublic: { type: boolean, default: false }
 
     Problem:
       description: |

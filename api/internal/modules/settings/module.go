@@ -53,8 +53,20 @@ func (m *Module) Routes(r *httpx.Router) {
 		r.Get("/public/settings", m.listarPublicas)
 
 		// Y lo protegido cierra por omision: sin sesion, 401; con sesion sin el
-		// permiso, 403. En la fase 1 nadie tiene sesion todavia, asi que esta
-		// ruta responde 401 hasta la fase 2 — y eso es correcto, no un pendiente.
-		r.Get("/settings", m.listarTodas, rbac.Require("settings.read"))
+		// permiso, 403. En la fase 1 nadie tiene sesion todavia, asi que estas
+		// rutas responden 401 hasta la fase 2 — y eso es correcto, no un
+		// pendiente.
+		r.Group("/settings", func(r *httpx.Router) {
+			r.Get("", m.listar, rbac.Require("settings.read"))
+			r.Post("", m.crear, rbac.Require("settings.write"))
+			r.Get("/{key}", m.leer, rbac.Require("settings.read"))
+			r.Put("/{key}", m.reemplazar, rbac.Require("settings.write"))
+
+			// DELETE no existe, y es deliberado: el codigo de la landing lee
+			// claves por nombre, asi que borrar una no deja un hueco sino una
+			// pantalla rota, y sin rastro de que hubo algo ahi. Una clave que
+			// sobra se apaga con su valor, no se borra.
+			// Ver docs/04-reglas-de-crud.md seccion 8.
+		})
 	})
 }
