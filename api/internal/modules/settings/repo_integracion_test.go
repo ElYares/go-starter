@@ -94,7 +94,7 @@ func TestIntegracionElAltaLlenaLaAuditoriaSola(t *testing.T) {
 	key := claveDePrueba(t, r)
 	ctx := conActor(idDeJuan)
 
-	creada, err := r.crear(ctx, Setting{Key: key, Value: json.RawMessage(`{"a":1}`), IsPublic: true})
+	creada, err := r.crear(ctx, Setting{Key: key, Value: map[string]any{"a": 1}, IsPublic: true})
 	if err != nil {
 		t.Fatalf("crear: %v", err)
 	}
@@ -118,14 +118,14 @@ func TestIntegracionLaModificacionConservaLaCreacion(t *testing.T) {
 	r := &Repo{pool: pool(t)}
 	key := claveDePrueba(t, r)
 
-	if _, err := r.crear(conActor(idDeJuan), Setting{Key: key, Value: json.RawMessage(`{"a":1}`)}); err != nil {
+	if _, err := r.crear(conActor(idDeJuan), Setting{Key: key, Value: map[string]any{"a": 1}}); err != nil {
 		t.Fatalf("crear: %v", err)
 	}
 	createdAtAntes, _, createdByAntes, _ := auditoriaDe(t, r, key)
 
 	// Otra persona guarda encima.
 	actualizada, err := r.actualizar(conActor(otroID), Setting{
-		Key: key, Value: json.RawMessage(`{"a":2}`), IsPublic: true, Version: 1,
+		Key: key, Value: map[string]any{"a": 2}, IsPublic: true, Version: 1,
 	})
 	if err != nil {
 		t.Fatalf("actualizar: %v", err)
@@ -154,15 +154,15 @@ func TestIntegracionUnaVersionViejaNoEscribe(t *testing.T) {
 	key := claveDePrueba(t, r)
 	ctx := conActor(idDeJuan)
 
-	if _, err := r.crear(ctx, Setting{Key: key, Value: json.RawMessage(`{"a":1}`)}); err != nil {
+	if _, err := r.crear(ctx, Setting{Key: key, Value: map[string]any{"a": 1}}); err != nil {
 		t.Fatalf("crear: %v", err)
 	}
-	if _, err := r.actualizar(ctx, Setting{Key: key, Value: json.RawMessage(`{"a":2}`), Version: 1}); err != nil {
+	if _, err := r.actualizar(ctx, Setting{Key: key, Value: map[string]any{"a": 2}, Version: 1}); err != nil {
 		t.Fatalf("primer guardado: %v", err)
 	}
 
 	// Alguien que leyo la version 1 intenta guardar cuando ya va por la 2.
-	_, err := r.actualizar(ctx, Setting{Key: key, Value: json.RawMessage(`{"a":99}`), Version: 1})
+	_, err := r.actualizar(ctx, Setting{Key: key, Value: map[string]any{"a": 99}, Version: 1})
 	if !errors.Is(err, errVersion) {
 		t.Fatalf("err = %v, se esperaba errVersion", err)
 	}
@@ -171,8 +171,11 @@ func TestIntegracionUnaVersionViejaNoEscribe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("obtener: %v", err)
 	}
-	if string(actual.Value) != `{"a": 2}` && string(actual.Value) != `{"a":2}` {
-		t.Errorf("value = %s; el guardado rechazado no puede haber escrito nada", actual.Value)
+	// El valor viaja como JSON libre, asi que del otro lado es un interface{}.
+	// Se compara serializado para no depender de como lo represente Go.
+	crudo, _ := json.Marshal(actual.Value)
+	if string(crudo) != `{"a":2}` {
+		t.Errorf("value = %s; el guardado rechazado no puede haber escrito nada", crudo)
 	}
 }
 
@@ -181,7 +184,7 @@ func TestIntegracionDistingueNoExisteDeVersionEquivocada(t *testing.T) {
 	ctx := conActor(idDeJuan)
 
 	_, err := r.actualizar(ctx, Setting{
-		Key: "prueba.integracion.no.existe", Value: json.RawMessage(`1`), Version: 1,
+		Key: "prueba.integracion.no.existe", Value: 1, Version: 1,
 	})
 	if !errors.Is(err, errNoExiste) {
 		t.Fatalf("err = %v, se esperaba errNoExiste; 404 y 409 llevan al usuario a cosas distintas", err)
@@ -193,10 +196,10 @@ func TestIntegracionUnaClaveDuplicadaEsErrYaExiste(t *testing.T) {
 	key := claveDePrueba(t, r)
 	ctx := conActor(idDeJuan)
 
-	if _, err := r.crear(ctx, Setting{Key: key, Value: json.RawMessage(`1`)}); err != nil {
+	if _, err := r.crear(ctx, Setting{Key: key, Value: 1}); err != nil {
 		t.Fatalf("crear: %v", err)
 	}
-	if _, err := r.crear(ctx, Setting{Key: key, Value: json.RawMessage(`2`)}); !errors.Is(err, errYaExiste) {
+	if _, err := r.crear(ctx, Setting{Key: key, Value: 2}); !errors.Is(err, errYaExiste) {
 		t.Fatalf("err = %v, se esperaba errYaExiste", err)
 	}
 }
@@ -207,7 +210,7 @@ func TestIntegracionSinActorFirmaElSistema(t *testing.T) {
 	r := &Repo{pool: pool(t)}
 	key := claveDePrueba(t, r)
 
-	if _, err := r.crear(context.Background(), Setting{Key: key, Value: json.RawMessage(`1`)}); err != nil {
+	if _, err := r.crear(context.Background(), Setting{Key: key, Value: 1}); err != nil {
 		t.Fatalf("crear: %v", err)
 	}
 
@@ -228,7 +231,7 @@ func TestIntegracionElOrdenYElFiltroSeAplicanEnLaConsulta(t *testing.T) {
 
 	for _, k := range []string{"a", "b", "c"} {
 		key := claveDePrueba(t, r)
-		if _, err := r.crear(ctx, Setting{Key: key, Value: json.RawMessage(`"` + k + `"`), IsPublic: true}); err != nil {
+		if _, err := r.crear(ctx, Setting{Key: key, Value: k, IsPublic: true}); err != nil {
 			t.Fatalf("crear: %v", err)
 		}
 	}

@@ -1,0 +1,31 @@
+# Generacion del lado del servidor para este modulo.
+#
+# `include-tags` es lo que hace posible generar POR MODULO. Sin el, oapi-codegen
+# emite una sola ServerInterface con TODAS las operaciones del contrato, y
+# entonces un unico struct tendria que implementar las de salud, las de settings
+# y las de cada modulo futuro. Eso obligaria a `app` a conocer cada operacion, y
+# es justo lo que prohibe la Decision 002.
+#
+# El tag ya existia: las operaciones de este modulo estan etiquetadas `settings`
+# en el contrato desde HU-004.
+#
+# NO se usa el registro de rutas que trae lo generado (`HandlerWithOptions`).
+# Ese registra sobre un mux con middleware global, y con eso se perderia el
+# permiso por ruta, `Route.Permission` y el arranque que se niega a levantar si
+# una ruta exige un permiso que nadie declara. En su lugar se montan los metodos
+# de ServerInterfaceWrapper, que son http.HandlerFunc normales, sobre el router
+# propio. Ver module.go.
+#
+# `Problem` se genera aunque este modulo no lo use: lo referencian sus respuestas
+# de error. No se excluye porque `exclude-schemas` emite `type Problem = Problem`,
+# un alias recursivo que no compila. En vez de dejarlo muerto, una prueba lo
+# compara contra httpx.Problem para detectar deriva entre el contrato y el tipo
+# escrito a mano.
+package: settings
+output: openapi_gen.go
+generate:
+  models: true
+  std-http-server: true
+output-options:
+  include-tags:
+    - settings

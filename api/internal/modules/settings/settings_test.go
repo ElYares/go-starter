@@ -81,7 +81,7 @@ func (r *repoFalso) actualizar(ctx context.Context, s Setting) (Setting, error) 
 }
 
 func unSetting(key string) Setting {
-	return Setting{Key: key, Value: json.RawMessage(`{"a":1}`), Version: 7, UpdatedAt: time.Now()}
+	return Setting{Key: key, Value: map[string]any{"a": 1}, Version: 7, UpdatedAt: time.Now()}
 }
 
 // servidor monta el modulo con la misma cadena que en produccion. Sin el
@@ -167,7 +167,7 @@ func TestLaColeccionSaleConElEnvoltorioYNuncaComoArray(t *testing.T) {
 		t.Fatalf("la coleccion salio como array pelado: %s", rec.Body.String())
 	}
 
-	var pagina paging.Page[Setting]
+	var pagina SettingsPage
 	if err := json.Unmarshal(rec.Body.Bytes(), &pagina); err != nil {
 		t.Fatalf("cuerpo = %q", rec.Body.String())
 	}
@@ -188,7 +188,7 @@ func TestUnTamanoAbsurdoDevuelveElTopeYLaConsultaLoRespeta(t *testing.T) {
 		t.Fatalf("estado = %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var pagina paging.Page[Setting]
+	var pagina SettingsPage
 	_ = json.Unmarshal(rec.Body.Bytes(), &pagina)
 
 	if pagina.Page.Size != 100 {
@@ -407,7 +407,7 @@ func TestUnaClaveDuplicadaEs409(t *testing.T) {
 
 func TestUnaClaveMalFormadaEs400YNombraElCampo(t *testing.T) {
 	for _, clave := range []string{"", "Site.Brand", "site brand", "site..brand", ".site"} {
-		cuerpo, _ := json.Marshal(entrada{Key: clave, Value: json.RawMessage(`1`)})
+		cuerpo, _ := json.Marshal(SettingNuevo{Key: clave, Value: 1})
 
 		rec := llamar(t, &repoFalso{}, escritor(), peticion{
 			metodo: http.MethodPost, ruta: "/api/v1/settings", cuerpo: string(cuerpo),

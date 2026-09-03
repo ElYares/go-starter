@@ -1,0 +1,17 @@
+# Las rutas que no pertenecen a ningun modulo: salud.
+#
+# Va aparte de las de los modulos por la misma razon que aquellas van separadas
+# entre si: `include-tags` es lo que evita una unica ServerInterface con todas
+# las operaciones del contrato. Ver internal/modules/settings/openapi.cfg.yaml.
+#
+# `/api/v1/docs` y `/api/v1/openapi.yaml` NO estan en el contrato y por eso no
+# aparecen aqui: son la UI de exploracion, existen solo con API_DOCS_ENABLED y
+# no son superficie publica de la API.
+package: app
+output: openapi_gen.go
+generate:
+  models: true
+  std-http-server: true
+output-options:
+  include-tags:
+    - salud

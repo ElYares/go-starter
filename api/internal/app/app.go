@@ -7,6 +7,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -20,6 +21,15 @@ import (
 	"github.com/elyares/go-starter/api/internal/platform/observ"
 	"github.com/elyares/go-starter/api/internal/platform/rbac"
 )
+
+// El contrato manda: de api/openapi.yaml salen los tipos y la interfaz de
+// servidor de las rutas de plataforma. Se regenera con `go generate ./...`
+// desde api/. Ver docs/05-contratos-api.md.
+//go:generate go tool oapi-codegen --config openapi.cfg.yaml ../../openapi.yaml
+
+// Si en el contrato se renombra `healthz` o se le agrega un parametro, esta
+// linea deja de compilar. Ver internal/modules/settings/module.go.
+var _ ServerInterface = (*App)(nil)
 
 type App struct {
 	cfg    config.Config
@@ -100,10 +110,15 @@ func (a *App) montar(mods []Module) error {
 // rutasDePlataforma son las que no pertenecen a ningun modulo: salud y, en
 // desarrollo, la UI del contrato.
 func (a *App) rutasDePlataforma(r *httpx.Router) {
-	r.Group("/api/v1", func(r *httpx.Router) {
-		r.Get("/healthz", a.healthz)
-		r.Get("/readyz", a.readyz)
+	w := &ServerInterfaceWrapper{Handler: a, ErrorHandlerFunc: errorDeParametro}
 
+	r.Group("/api/v1", func(r *httpx.Router) {
+		r.Get("/healthz", w.Healthz)
+		r.Get("/readyz", w.Readyz)
+
+		// Estas dos NO estan en el contrato, y es deliberado: son la UI de
+		// exploracion, viven solo con API_DOCS_ENABLED y no son superficie
+		// publica de la API. contrato_test.go las conoce y las exime.
 		if a.spec != nil {
 			r.Get("/openapi.yaml", a.openapiSpec)
 			r.Get("/docs", a.apiDocs)
@@ -128,4 +143,40 @@ func (a *App) Handler() http.Handler {
 		httpx.Recover(a.log),
 		observ.RequestLogger(a.log),
 	)
+}
+
+// errorDeParametro traduce los fallos de enlace del codigo generado a la forma
+// unica de error. Sin el, lo generado responde con `http.Error`: texto plano y
+// sin traceId, que es el mismo agujero que el 404 de omision de net/http.
+//
+// El `switch` se repite en cada paquete que genera codigo porque oapi-codegen
+// deja estos tipos de error dentro del paquete, no en uno compartido. Lo que si
+// se comparte es el texto de la respuesta, que vive en httpx.
+//
+// Hoy ninguna ruta de plataforma declara parametros, asi que esto no se dispara.
+// Existe para que el dia que alguna los declare no aparezca un texto plano en
+// medio de una API que promete problem+json.
+func errorDeParametro(w http.ResponseWriter, r *http.Request, err error) {
+	var (
+		requerido  *RequiredParamError
+		cabecera   *RequiredHeaderError
+		formato    *InvalidParamFormatError
+		repetido   *TooManyValuesForParamError
+		desempaque *UnmarshalingParamError
+	)
+
+	switch {
+	case errors.As(err, &requerido):
+		httpx.WriteProblem(w, r, httpx.ParamRequired(requerido.ParamName))
+	case errors.As(err, &cabecera):
+		httpx.WriteProblem(w, r, httpx.ParamRequired(cabecera.ParamName))
+	case errors.As(err, &repetido):
+		httpx.WriteProblem(w, r, httpx.ParamRepeated(repetido.ParamName))
+	case errors.As(err, &formato):
+		httpx.WriteProblem(w, r, httpx.ParamType(formato.ParamName))
+	case errors.As(err, &desempaque):
+		httpx.WriteProblem(w, r, httpx.ParamType(desempaque.ParamName))
+	default:
+		httpx.WriteProblem(w, r, httpx.ParamInvalid())
+	}
 }

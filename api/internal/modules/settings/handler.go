@@ -13,14 +13,18 @@ import (
 	"github.com/elyares/go-starter/api/internal/platform/observ"
 )
 
-// listarPublicas devuelve un objeto plano de clave a valor, no el envoltorio de
-// coleccion.
+// Los nombres y las firmas de estos metodos NO son una eleccion: los dicta
+// ServerInterface, que sale del contrato. Si se renombra una operacion en
+// api/openapi.yaml y no aqui, la afirmacion de module.go deja de compilar.
+
+// ListarSettingsPublicas devuelve un objeto plano de clave a valor, no el
+// envoltorio de coleccion.
 //
 // Es la excepcion escrita del molde, no un olvido: la landing consume la
 // configuracion ENTERA en cada carga renderizada en servidor, y darle paginas
 // la obligaria a pedir varias para dibujar una sola pantalla. El envoltorio es
 // para colecciones que crecen; esta no crece.
-func (m *Module) listarPublicas(w http.ResponseWriter, r *http.Request) {
+func (m *Module) ListarSettingsPublicas(w http.ResponseWriter, r *http.Request) {
 	m.mapa(w, r, m.svc.Publicas)
 }
 
@@ -31,7 +35,7 @@ func (m *Module) mapa(w http.ResponseWriter, r *http.Request, fn func(context.Co
 		return
 	}
 
-	valores := make(map[string]any, len(items))
+	valores := make(SettingsMap, len(items))
 	for _, s := range items {
 		valores[s.Key] = s.Value
 	}
@@ -39,9 +43,14 @@ func (m *Module) mapa(w http.ResponseWriter, r *http.Request, fn func(context.Co
 	httpx.WriteJSON(w, r, http.StatusOK, valores)
 }
 
-// listar es el endpoint de coleccion: envoltorio fijo, tope duro de size y
-// listas blancas de orden y filtro. Lo consume el dashboard.
-func (m *Module) listar(w http.ResponseWriter, r *http.Request) {
+// ListarSettings es el endpoint de coleccion. Lo consume el dashboard.
+//
+// `params` llega ya enlazado por el codigo generado, que comprueba los TIPOS
+// que declara el contrato: `?size=abc` no llega hasta aqui. `paging` hace lo
+// otro, que el contrato no puede expresar: la lista blanca de campos, el tope
+// efectivo y la traduccion a columnas. Son comprobaciones distintas, y por eso
+// conviven; paging es la mas estricta de las dos, asi que nunca se contradicen.
+func (m *Module) ListarSettings(w http.ResponseWriter, r *http.Request, _ ListarSettingsParams) {
 	pagina, err := m.svc.Pagina(r.Context(), r.URL.Query())
 	if err != nil {
 		m.fallo(w, r, err)
@@ -50,8 +59,8 @@ func (m *Module) listar(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, r, http.StatusOK, pagina)
 }
 
-func (m *Module) leer(w http.ResponseWriter, r *http.Request) {
-	item, err := m.svc.Leer(r.Context(), r.PathValue("key"))
+func (m *Module) LeerSetting(w http.ResponseWriter, r *http.Request, key string) {
+	item, err := m.svc.Leer(r.Context(), key)
 	if err != nil {
 		m.fallo(w, r, err)
 		return
@@ -61,14 +70,17 @@ func (m *Module) leer(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, r, http.StatusOK, item)
 }
 
-func (m *Module) crear(w http.ResponseWriter, r *http.Request) {
-	var e entrada
-	if prob := httpx.DecodeJSON(w, r, &e); prob != nil {
+func (m *Module) CrearSetting(w http.ResponseWriter, r *http.Request) {
+	// El cuerpo se decodifica con httpx y no con lo generado: la decodificacion
+	// estricta —un campo desconocido es 400, no un silencio— es una promesa de
+	// la plataforma, y el contrato la declara con `additionalProperties: false`.
+	var nueva SettingNuevo
+	if prob := httpx.DecodeJSON(w, r, &nueva); prob != nil {
 		httpx.WriteProblem(w, r, prob)
 		return
 	}
 
-	creada, err := m.svc.Crear(r.Context(), e)
+	creada, err := m.svc.Crear(r.Context(), nueva)
 	if err != nil {
 		m.fallo(w, r, err)
 		return
@@ -78,20 +90,24 @@ func (m *Module) crear(w http.ResponseWriter, r *http.Request) {
 	httpx.Created(w, r, "/api/v1/settings/"+creada.Key, creada)
 }
 
-func (m *Module) reemplazar(w http.ResponseWriter, r *http.Request) {
-	version, prob := versionPedida(r)
+// ReemplazarSetting exige la version que el cliente creia estar editando. Que
+// `If-Match` sea obligatoria la garantiza el contrato: el codigo generado
+// responde antes de llegar aqui si falta. Lo que queda por comprobar es la
+// FORMA del valor, que el contrato no puede expresar.
+func (m *Module) ReemplazarSetting(w http.ResponseWriter, r *http.Request, key string, params ReemplazarSettingParams) {
+	version, prob := versionDeETag(params.IfMatch)
 	if prob != nil {
 		httpx.WriteProblem(w, r, prob)
 		return
 	}
 
-	var mod modificacion
+	var mod SettingModificacion
 	if prob := httpx.DecodeJSON(w, r, &mod); prob != nil {
 		httpx.WriteProblem(w, r, prob)
 		return
 	}
 
-	actualizada, err := m.svc.Reemplazar(r.Context(), r.PathValue("key"), version, mod)
+	actualizada, err := m.svc.Reemplazar(r.Context(), key, version, mod)
 	if err != nil {
 		m.fallo(w, r, err)
 		return
@@ -105,22 +121,8 @@ func (m *Module) reemplazar(w http.ResponseWriter, r *http.Request) {
 // sin tener que entender que por dentro es un contador.
 func etag(version int) string { return fmt.Sprintf("%q", strconv.Itoa(version)) }
 
-// versionPedida lee If-Match. La cabecera es OBLIGATORIA en las escrituras:
-// permitirla ausente convertiria cada guardado descuidado en una sobrescritura
-// silenciosa, que es justo lo que el `version` existe para impedir.
-//
-// Va como 400 VALIDATION_FAILED y no como 428: la tabla de codigos de
-// docs/04-reglas-de-crud.md seccion 2 es normativa y no tiene 428, y una
-// cabecera obligatoria que falta es un parametro invalido.
-func versionPedida(r *http.Request) (int, *httpx.Problem) {
-	crudo := strings.TrimSpace(r.Header.Get("If-Match"))
-
-	if crudo == "" {
-		return 0, httpx.BadRequest("Falta la cabecera If-Match", httpx.FieldIssue{
-			Field: "If-Match", Code: "required",
-			Message: "Manda el ETag que devolvio la lectura, para no pisar el cambio de otra persona",
-		})
-	}
+func versionDeETag(crudo string) (int, *httpx.Problem) {
+	crudo = strings.TrimSpace(crudo)
 
 	// `*` significa "cualquiera": es una sobrescritura incondicional, que es
 	// exactamente lo que aqui no se quiere permitir.

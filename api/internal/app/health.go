@@ -9,31 +9,39 @@ import (
 	"github.com/elyares/go-starter/api/internal/platform/observ"
 )
 
-// healthz responde si el proceso vive. No toca la base a proposito: mezclar las
+// Los nombres y las firmas los dicta ServerInterface, que sale del contrato.
+// Ver la afirmacion en app.go.
+
+// Healthz responde si el proceso vive. No toca la base a proposito: mezclar las
 // dos preguntas hace que un reinicio de la base parezca un proceso muerto y
 // dispare reinicios que no arreglan nada.
-func (a *App) healthz(w http.ResponseWriter, r *http.Request) {
-	httpx.WriteJSON(w, r, http.StatusOK, map[string]string{"status": "ok"})
+func (a *App) Healthz(w http.ResponseWriter, r *http.Request) {
+	// El cuerpo sale de los tipos del contrato, no de un map escrito a mano. Un
+	// map acepta cualquier clave y cualquier valor, asi que una respuesta que se
+	// aparta del contrato compila igual y nadie se entera.
+	httpx.WriteJSON(w, r, http.StatusOK, Health{Status: HealthStatusOk})
 }
 
-// readyz responde si el proceso puede atender: hoy, si la base contesta.
-func (a *App) readyz(w http.ResponseWriter, r *http.Request) {
+// Readyz responde si el proceso puede atender: hoy, si la base contesta.
+func (a *App) Readyz(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
 	if err := a.pool.Ping(ctx); err != nil {
+		trace := observ.TraceIDFrom(ctx)
 		a.log.WarnContext(ctx, "readyz: la base no responde",
-			"error", err, "traceId", observ.TraceIDFrom(ctx))
-		httpx.WriteJSON(w, r, http.StatusServiceUnavailable, map[string]any{
-			"status":  "unavailable",
-			"checks":  map[string]string{"db": "down"},
-			"traceId": observ.TraceIDFrom(ctx),
+			"error", err, "traceId", trace)
+
+		httpx.WriteJSON(w, r, http.StatusServiceUnavailable, Readiness{
+			Status:  ReadinessStatusUnavailable,
+			Checks:  map[string]ReadinessChecks{"db": Down},
+			TraceId: &trace,
 		})
 		return
 	}
 
-	httpx.WriteJSON(w, r, http.StatusOK, map[string]any{
-		"status": "ok",
-		"checks": map[string]string{"db": "up"},
+	httpx.WriteJSON(w, r, http.StatusOK, Readiness{
+		Status: ReadinessStatusOk,
+		Checks: map[string]ReadinessChecks{"db": Up},
 	})
 }
