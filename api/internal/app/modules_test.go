@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/elyares/go-starter/api/internal/platform/config"
 	"github.com/elyares/go-starter/api/internal/platform/httpx"
 	"github.com/elyares/go-starter/api/internal/platform/rbac"
 )
@@ -97,12 +98,45 @@ func TestDosModulosNoPuedenDeclararElMismoPermiso(t *testing.T) {
 // una decision visible.
 func TestElRegistroDeclaraLosModulosEsperados(t *testing.T) {
 	nombres := []string{}
-	for _, m := range Modules(nil) {
+	for _, m := range Modules(config.Config{}, nil) {
 		nombres = append(nombres, m.Name())
 	}
 
-	esperado := []string{"settings"}
+	// identity va primero porque es el orden de las migraciones, y las llaves
+	// foraneas de los demas apuntan a sus usuarios. Cambiar este orden no es
+	// cosmetico: rompe la migracion en una base vacia.
+	esperado := []string{"identity", "settings"}
 	if strings.Join(nombres, ",") != strings.Join(esperado, ",") {
 		t.Errorf("modulos registrados = %v, se esperaba %v\nsi agregaste uno, actualiza esta prueba y confirma que su posicion en la lista es la que quieres: es el orden en que corren las migraciones", nombres, esperado)
+	}
+}
+
+// Las dos interfaces opcionales del registro no se comprueban al compilar: un
+// type assertion que no encaja devuelve false y sigue. Si a `SembrarPermisos` o
+// a `SembrarSuperadminDeDesarrollo` se les cambia un parametro y el modulo no
+// se entera, todo compila, el arranque no protesta, y lo unico que pasa es que
+// no se siembra nada. Eso se descubre entrando al dashboard y recibiendo un 403
+// en todo, sin un solo error en el log.
+//
+// Esta prueba es lo que convierte ese silencio en un fallo. Ya paso una vez:
+// la interfaz decia `displayName` donde el modulo decia `nombre`.
+func TestElRegistroTieneQuienSiembreElCatalogoYElSuperadmin(t *testing.T) {
+	mods := Modules(config.Config{}, nil)
+
+	var catalogos, sembradores []string
+	for _, m := range mods {
+		if _, ok := m.(CatalogoDePermisos); ok {
+			catalogos = append(catalogos, m.Name())
+		}
+		if _, ok := m.(SembradorDeSuperadmin); ok {
+			sembradores = append(sembradores, m.Name())
+		}
+	}
+
+	if len(catalogos) != 1 {
+		t.Errorf("modulos que guardan el catalogo de permisos = %v; tiene que haber exactamente uno", catalogos)
+	}
+	if len(sembradores) != 1 {
+		t.Errorf("modulos que siembran el superadmin = %v; tiene que haber exactamente uno", sembradores)
 	}
 }

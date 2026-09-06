@@ -19,16 +19,22 @@
 users (
   id uuid pk,
   email citext unique not null,        -- citext: comparación insensible sin lower()
-  password_hash text not null,          -- argon2id
+  password_hash text not null,          -- argon2id en formato PHC
   display_name text not null,
   enabled boolean not null default true,
+  dev_seed boolean not null default false,  -- lo creó cmd/seed. Ver abajo
+  version int not null default 1,
   created_at, created_by, updated_at, updated_by
 )
 
-roles (id uuid pk, key text unique, name text)          -- admin, staff, viewer
-permissions (key text pk, description text)             -- sembrados por cada módulo
-role_permissions (role_id, permission_key)              -- pk compuesta
-user_roles (user_id, role_id)                           -- pk compuesta
+roles (id uuid pk, key text unique, name text)          -- superadmin, admin, staff, viewer
+permissions (
+  key text pk,
+  description text not null,
+  sensitive boolean not null default false  -- lo marca el módulo. Ver abajo
+)
+role_permissions (role_id, permission_key)              -- pk compuesta, on delete cascade
+user_roles (user_id, role_id)                           -- pk compuesta, on delete cascade
 
 refresh_tokens (
   id uuid pk,
@@ -42,14 +48,62 @@ refresh_tokens (
 )
 ```
 
-Tres cosas que no son obvias:
+Los cuatro roles del starter —`superadmin`, `admin`, `staff`, `viewer`— sí los
+siembra la migración, con ids fijos escritos a mano. Son contenido por omisión,
+como las claves de `settings`; y el id fijo es lo que permite que un seed o una
+prueba nombre el rol `superadmin` sin tener que consultarlo antes.
 
-- **`permissions` la siembran los módulos al arrancar**, desde
-  `Module.Permissions()`. Una migración que inserta permisos a mano se
-  desincroniza el día que se borra el módulo
+**`superadmin` y `admin` no son el mismo rol con otro nombre.** El primero
+reparte poder —cuentas, roles, permisos—; el segundo opera el sitio. Quien puede
+asignar roles puede darse a sí mismo cualquier permiso, así que si `admin`
+tuviera `identity.role.assign` la separación no separaría nada.
+
+Siete cosas que no son obvias:
+
+- **`permissions` la siembran los módulos, no una migración.** El catálogo se
+  reconcilia desde `Module.Permissions()` en `app.SeedPermissions`, pegado a las
+  migraciones: alta, actualización de la descripción, y **borrado de lo que ya
+  nadie declara**. Una migración que inserta permisos a mano se desincroniza el
+  día que se borra el módulo, y deja roles concediendo algo que no existe
+- **El rol `superadmin` recibe todo permiso declarado**, en la misma
+  transacción. Sin eso, el permiso de un módulo nuevo nace inalcanzable: nadie
+  lo tiene, y la pantalla para concederlo también lo exige. Sus concesiones no
+  son datos editables: se reconcilian en cada despliegue
+- **El rol `admin` arranca con lo que ningún módulo marcó como sensible, y solo
+  si todavía no tiene ninguna concesión.** Es un punto de partida para un fork
+  recién clonado, no una regla permanente: a partir del primer arranque sus
+  concesiones son datos que se editan, y lo que se le quite desde el dashboard
+  queda quitado. Sin esa condición, la siembra pelearía con la pantalla de roles
+  y el permiso revocado volvería en el siguiente despliegue
+- **`Sensitive` lo decide el módulo que inventa el permiso**, en su
+  `Permissions()`, porque es el único que sabe qué hace. Una lista en la siembra
+  —"todo lo que empiece por `identity.`"— habría que editarla desde fuera cada
+  vez que un fork agrega un dominio con operaciones delicadas propias
+- **La tabla la guarda el módulo que la posee, y `app` lo descubre por
+  interfaz** (`CatalogoDePermisos`), no por el nombre del paquete. Un fork que
+  borre `identity` sigue compilando y simplemente no siembra nada
+- **`dev_seed` marca al admin que crea `cmd/seed`.** La marca viaja en la fila,
+  no en la máquina del que sembró: `Autenticar` rechaza esa cuenta cuando
+  `APP_ENV` no es `dev`, así que un volcado de desarrollo copiado a otro entorno
+  no trae dentro una cuenta con contraseña pública
 - **`refresh_tokens.token_hash` es la única forma aceptable de guardarlo.** Una
   fuga de la base no debe entregar sesiones activas
 - **`replaced_by` es lo que detecta el robo de un refresh.** Ver `06-flujos.md`
+
+### La invariante: siempre queda un superadmin
+
+Quitarle el rol `superadmin` al último superadmin habilitado, o deshabilitarlo,
+responde `409`. La comprobación vive **en el `WHERE` de la sentencia que
+escribe**, no en un `if` previo: contar los superadmins en Go y borrar después
+deja una ventana en la que dos peticiones pasan la comprobación a la vez y la
+instalación se queda sin nadie que pueda repartir permisos. La única salida
+entonces es abrir la base a mano.
+
+Un superadmin **deshabilitado no cuenta** como el que queda.
+
+**`admin` no lleva invariante**, y es deliberado: es un rol como cualquier otro.
+Quitárselo al único que lo tiene es una operación normal, y bloquearla sería un
+`409` que nadie entiende.
 
 ## Contenido: la landing editable (`modules/content`)
 

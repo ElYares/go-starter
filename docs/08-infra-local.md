@@ -83,6 +83,12 @@ Otros puntos que ya dolieron en el proyecto hermano y aplican igual aquí:
   dependencias en cualquier stack con recarga en caliente
 - **La base desde un gestor gráfico:** la IP sale de
   `docker inspect devherd-go-starter-<hash>-db-1`. Cambia en cada `down`+`up`
+- **`devherd exec` no existe.** No hay tal subcomando: todo lo que corre dentro
+  de un contenedor va por `docker exec`
+- **Con `docker exec`, no metas un `sh -lc`.** El shell de login rehace el
+  `PATH` y deja fuera `/usr/local/go/bin`, así que el comando falla con
+  `sh: go: not found` aunque Go esté instalado. Sin `sh`, `docker exec … go
+  test` funciona
 
 ## Migraciones
 
@@ -90,8 +96,38 @@ Otros puntos que ya dolieron en el proyecto hermano y aplican igual aquí:
 # desarrollo: las aplica el servidor al arrancar (MIGRATE_ON_START=true en el compose)
 devherd logs | grep "migracion aplicada"
 
-# a mano, o como paso de despliegue
-docker exec <contenedor-api> go run ./cmd/migrate
+# a mano, o como paso de despliegue. Aplica lo pendiente Y reconcilia el
+# catálogo de permisos que declaran los módulos. Ver docs/03-modelo-de-datos.md
+docker exec -w /workspace <contenedor-api> go run ./cmd/migrate
+```
+
+## El superadmin de desarrollo
+
+```sh
+docker exec -w /workspace <contenedor-api> go run ./cmd/seed
+```
+
+Migra, siembra los permisos y crea la cuenta con la que se entra a `/admin`:
+`superadmin@go-starter.localhost` / `superadmin-de-desarrollo`, o lo que digan
+`SEED_SUPERADMIN_EMAIL`, `SEED_SUPERADMIN_PASSWORD` y `SEED_SUPERADMIN_NAME`. Se
+puede correr las veces que haga falta: las tres cosas son idempotentes, y volver
+a sembrar reescribe la contraseña conservando el id.
+
+Es `superadmin` y no `admin` a propósito: en desarrollo hace falta poder tocarlo
+todo, incluidos los roles y los permisos.
+
+**Solo corre con `APP_ENV=dev`**, y la cuenta que crea queda marcada en la fila
+(`users.dev_seed`): esas credenciales no autentican fuera de desarrollo aunque
+la base termine copiada a otro entorno. Ver `docs/03-modelo-de-datos.md`.
+
+## Pruebas de integración
+
+Las que ejecutan SQL de verdad se saltan solas sin `DATABASE_URL`, que fuera del
+contenedor no está puesta. Van dentro:
+
+```sh
+docker exec -w /workspace <contenedor-api> \
+    go test ./internal/modules/identity/ -run Integracion -v
 ```
 
 Cada módulo lleva **su propia tabla de versiones**, `schema_migrations_<módulo>`.

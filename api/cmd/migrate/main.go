@@ -42,5 +42,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Info("migraciones al dia")
+	// El catalogo de permisos va aqui y no en el arranque del servidor: es un
+	// cambio de esquema logico, del mismo tipo que una migracion, y por la
+	// misma razon tiene que ser un paso explicito. Ver app.SeedPermissions.
+	if err := app.SeedPermissions(ctx, cfg, log, pool); err != nil {
+		log.Error("fallo la siembra de permisos", "error", err)
+		os.Exit(1)
+	}
+
+	log.Info("migraciones y permisos al dia")
 }
