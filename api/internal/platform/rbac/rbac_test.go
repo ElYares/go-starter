@@ -83,3 +83,66 @@ func TestVerifyRoutesIgnoraLasRutasPublicas(t *testing.T) {
 		t.Errorf("una ruta sin permiso es publica y no tiene que fallar: %v", err)
 	}
 }
+
+// routerConSesion monta una ruta protegida SOLO por RequireSession, que es como
+// va `GET /auth/me`.
+func routerConSesion(actor *rbac.Actor) http.Handler {
+	r := httpx.NewRouter()
+	r.Get("/mio", func(w http.ResponseWriter, req *http.Request) {
+		httpx.WriteJSON(w, req, http.StatusOK, map[string]string{"ok": "si"})
+	}, rbac.RequireSession())
+
+	inyectar := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			if actor != nil {
+				req = req.WithContext(rbac.WithActor(req.Context(), *actor))
+			}
+			next.ServeHTTP(w, req)
+		})
+	}
+
+	return observ.Chain(r.Handler(), observ.TraceID, inyectar)
+}
+
+func pedirMio(h http.Handler) *httptest.ResponseRecorder {
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/mio", nil))
+	return rec
+}
+
+// RequireSession exige sesion y nada mas: es lo que protege `GET /auth/me`, que
+// no tiene un permiso con nombre que pedir porque todo el mundo puede leer su
+// propio perfil. Un actor SIN un solo permiso tiene que pasar.
+func TestRequireSessionDejaPasarAUnActorSinPermisos(t *testing.T) {
+	rec := pedirMio(routerConSesion(&rbac.Actor{ID: "u-1"}))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("estado = %d; un actor sin permisos tiene que poder leer su perfil", rec.Code)
+	}
+}
+
+// Y al anonimo lo corta con 401, no con 403: no es que le falte un permiso, es
+// que no hay sesion.
+func TestRequireSessionRechazaAlAnonimoCon401(t *testing.T) {
+	rec := pedirMio(routerConSesion(nil))
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("estado = %d, se esperaba 401", rec.Code)
+	}
+}
+
+// RequireSession NO anota permiso en la ruta. Es la razon por la que
+// `/auth/me` tiene que estar escrita como excepcion en la prueba de contrato de
+// app: desde alli se ve igual que una ruta sin proteger.
+func TestRequireSessionNoAnotaNingunPermisoEnLaRuta(t *testing.T) {
+	r := httpx.NewRouter()
+	r.Get("/mio", func(http.ResponseWriter, *http.Request) {}, rbac.RequireSession())
+
+	rutas := r.Routes()
+	if len(rutas) != 1 {
+		t.Fatalf("rutas = %d", len(rutas))
+	}
+	if rutas[0].Permission != "" {
+		t.Errorf("Permission = %q; RequireSession no pide ningun permiso con nombre", rutas[0].Permission)
+	}
+}

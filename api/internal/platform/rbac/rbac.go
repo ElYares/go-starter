@@ -82,6 +82,31 @@ func Require(key string) httpx.RouteOption {
 	return httpx.Combine(httpx.WithPermission(key), httpx.With(guard))
 }
 
+// RequireSession exige sesion y nada mas.
+//
+// Existe para el punado de rutas que toda persona autenticada puede usar sobre
+// SUS propias cosas —hoy `GET /auth/me`— y que por eso no tienen un permiso con
+// nombre que pedir. Inventarle uno seria peor: un `auth.me.read` que se le
+// concede a todo el mundo no informa nada y da la falsa impresion de que puede
+// quitarse.
+//
+// NO deja anotado ningun permiso en la ruta, asi que una ruta montada con esto
+// se ve igual que una sin guard para `VerifyRoutes`. Lo que impide que sea un
+// agujero es la prueba de contrato: toda ruta sin permiso tiene que vivir bajo
+// /public o estar escrita como excepcion, una por una.
+func RequireSession() httpx.RouteOption {
+	guard := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if _, ok := ActorFrom(r.Context()); !ok {
+				httpx.WriteProblem(w, r, httpx.Unauthorized())
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+	return httpx.With(guard)
+}
+
 // Registry es el catalogo de permisos que declararon los modulos.
 type Registry struct {
 	byKey map[string]Permission

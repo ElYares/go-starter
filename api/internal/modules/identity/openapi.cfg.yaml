@@ -1,0 +1,26 @@
+# Generacion del lado del servidor para este modulo, filtrada por tag.
+#
+# `include-tags: [auth]` es lo que permite generar POR MODULO en vez de una sola
+# ServerInterface con todas las operaciones del contrato. Ver la Decision 014 y
+# el mismo archivo en internal/modules/settings/.
+#
+# Ojo con el alcance: este modulo tiene DOS familias de operaciones. Las de
+# sesion van con el tag `auth` y salen aqui; el CRUD de cuentas que llegara en
+# una fase posterior tendra el suyo, y habra que agregarlo a esta lista o no se
+# generara nada para el.
+#
+# NO se usa `HandlerWithOptions`: registra sobre un mux con middleware global y
+# con eso se perderia el permiso por ruta y la comprobacion de arranque de
+# HU-005. Se montan los metodos de ServerInterfaceWrapper a mano. Ver module.go.
+#
+# `Problem` se genera aunque este modulo no lo devuelva por su cuenta: lo
+# referencian sus respuestas de error. No se excluye porque `exclude-schemas`
+# emite `type Problem = Problem`, un alias recursivo que no compila.
+package: identity
+output: openapi_gen.go
+generate:
+  models: true
+  std-http-server: true
+output-options:
+  include-tags:
+    - auth

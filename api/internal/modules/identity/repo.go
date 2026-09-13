@@ -389,3 +389,32 @@ func traducir(err error) error {
 	}
 	return err
 }
+
+// guardarRefresh deja constancia de una sesion abierta.
+//
+// Guarda el SHA-256 del token, nunca el token: una fuga de la base no debe
+// entregar sesiones activas. La columna es `bytea` y no `text` porque un hash
+// son bytes; guardarlo en hexadecimal invita a que alguien compare cadenas con
+// mayusculas distintas y no encuentre la fila.
+//
+// `ip` puede llegar vacia si la peticion no trae con que resolverla. Va como
+// NULL y no como cadena vacia: `inet` no acepta ” y el insert entero fallaria,
+// tumbando un login que por lo demas estaba bien.
+func (r *Repo) guardarRefresh(ctx context.Context, s SesionNueva) error {
+	var ip *string
+	if s.IP != "" {
+		ip = &s.IP
+	}
+
+	var ua *string
+	if s.UserAgent != "" {
+		ua = &s.UserAgent
+	}
+
+	_, err := r.pool.Exec(ctx,
+		`insert into refresh_tokens (id, user_id, token_hash, expires_at, user_agent, ip)
+		      values ($1, $2, $3, $4, $5, $6)`,
+		s.ID, s.UserID, s.TokenHash, s.ExpiraEn, ua, ip)
+
+	return traducir(err)
+}

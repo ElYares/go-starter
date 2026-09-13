@@ -10,7 +10,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/elyares/go-starter/api/internal/platform/observ"
 )
@@ -47,6 +50,15 @@ type Problem struct {
 	Code     string       `json:"code"`
 	TraceID  string       `json:"traceId"`
 	Errors   []FieldIssue `json:"errors,omitempty"`
+
+	// RetryAfter sale como cabecera `Retry-After` y NO en el cuerpo: es un dato
+	// de transporte, y el cliente que lo necesita —un reintento automatico— lee
+	// cabeceras, no JSON. Por eso el `json:"-"`.
+	//
+	// Vive en el Problem, y no lo pone el handler, para que un 429 no pueda
+	// salir sin decir cuanto esperar. Un 429 sin Retry-After deja al cliente
+	// eligiendo un numero, y el numero que elige es "ya".
+	RetryAfter time.Duration `json:"-"`
 }
 
 // Error hace que un Problem se pueda devolver como error desde un service y
@@ -78,6 +90,12 @@ func WriteProblem(w http.ResponseWriter, r *http.Request, p *Problem) {
 		p.Instance = r.URL.Path
 	}
 	p.TraceID = observ.TraceIDFrom(r.Context())
+
+	if p.RetryAfter > 0 {
+		// Hacia arriba: redondear hacia abajo produce un "espera 0 segundos"
+		// que invita a reintentar de inmediato y volver a recibir el mismo 429.
+		w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(p.RetryAfter.Seconds()))))
+	}
 
 	w.Header().Set("Content-Type", "application/problem+json; charset=utf-8")
 	w.WriteHeader(p.Status)
@@ -121,6 +139,18 @@ func Conflict(detail string) *Problem {
 
 func TooManyRequests(detail string) *Problem {
 	return New(http.StatusTooManyRequests, CodeTooManyRequests, "Demasiadas peticiones", detail)
+}
+
+// TooManyRequestsIn es el 429 con su Retry-After ya puesto.
+//
+// El detalle dice minutos porque es lo que una persona lee en pantalla; la
+// cabecera lleva los segundos exactos, que es lo que lee un programa.
+func TooManyRequestsIn(espera time.Duration) *Problem {
+	minutos := int(math.Ceil(espera.Minutes()))
+	p := TooManyRequests(fmt.Sprintf(
+		"Demasiados intentos. Vuelve a probar en %d minuto(s)", minutos))
+	p.RetryAfter = espera
+	return p
 }
 
 // Internal nunca lleva detalle del error real: eso se queda en el log, junto al

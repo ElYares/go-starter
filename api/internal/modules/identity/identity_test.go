@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/elyares/go-starter/api/internal/platform/auth"
 	"github.com/elyares/go-starter/api/internal/platform/httpx"
 )
 
@@ -31,10 +32,31 @@ type repoFalso struct {
 	porEmail map[string]*filaFalsa
 	roles    map[string][]string
 
+	// permisos, si esta puesto, sustituye a la lista fija. Ver permisosDe.
+	permisos *[]string
+
+	// vecesQueSeAutentico es lo que permite afirmar que el limite corre ANTES
+	// de tocar argon2. Sin contar las llamadas, un limite mal colocado responde
+	// 429 igual —solo que despues de gastar la CPU— y la prueba no lo nota.
+	vecesQueSeAutentico int
+
+	// Las sesiones guardadas. Se recuerdan enteras y no solo se cuentan: lo que
+	// hay que poder afirmar es que ahi dentro va el HASH y no el token.
+	sesiones []SesionNueva
+
 	// Lo que el repositorio de verdad devolveria; aqui se pone a mano para
 	// comprobar la traduccion.
-	errAlQuitarRol    error
-	errAlDeshabilitar error
+	errAlQuitarRol      error
+	errAlDeshabilitar   error
+	errAlGuardarRefresh error
+}
+
+func (r *repoFalso) guardarRefresh(_ context.Context, s SesionNueva) error {
+	if r.errAlGuardarRefresh != nil {
+		return r.errAlGuardarRefresh
+	}
+	r.sesiones = append(r.sesiones, s)
+	return nil
 }
 
 func nuevoRepoFalso() *repoFalso {
@@ -63,6 +85,7 @@ func (r *repoFalso) porID(_ context.Context, id string) (Usuario, error) {
 // doble que compara sensible daria por buena una normalizacion que la base no
 // necesita, y escondería el bug al reves.
 func (r *repoFalso) paraAutenticar(_ context.Context, email string) (Usuario, string, error) {
+	r.vecesQueSeAutentico++
 	f, ok := r.porEmail[strings.ToLower(email)]
 	if !ok {
 		return Usuario{}, "", errNoExiste
@@ -83,7 +106,14 @@ func (r *repoFalso) actualizarCredencial(_ context.Context, email, hash, nombre 
 	return f.usuario, nil
 }
 
+// permisosDe devuelve una lista fija salvo que la prueba pida otra cosa. El
+// puntero a nil de `permisos` significa "los de siempre"; una lista vacia
+// declarada significa "este usuario no tiene ninguno", que es un caso distinto
+// y hay que poder pedirlo.
 func (r *repoFalso) permisosDe(_ context.Context, userID string) ([]string, error) {
+	if r.permisos != nil {
+		return *r.permisos, nil
+	}
 	return []string{"identity.user.read", "settings.read"}, nil
 }
 
@@ -118,7 +148,16 @@ func (r *repoFalso) deshabilitar(_ context.Context, userID string) (Usuario, err
 func servicio(t *testing.T, dev bool) (*Service, *repoFalso) {
 	t.Helper()
 	repo := nuevoRepoFalso()
-	return &Service{repo: repo, dev: dev}, repo
+
+	// El firmante y el contador van de verdad, no falsos: son baratos, no tocan
+	// nada de fuera, y lo que interesa comprobar de IniciarSesion es justo como
+	// los usa —el orden del limite y que lo que se guarda es el hash.
+	f, err := auth.NewFirmante("llave-de-prueba-de-identity")
+	if err != nil {
+		t.Fatalf("NewFirmante: %v", err)
+	}
+
+	return &Service{repo: repo, dev: dev, firmante: f, intentos: auth.NewIntentos()}, repo
 }
 
 const (

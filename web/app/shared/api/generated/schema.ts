@@ -45,6 +45,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Iniciar sesion
+         * @description Responde `204` **sin cuerpo**: el perfil se pide con `GET /auth/me`,
+         *     para que haya un solo lugar que defina que sabe el frontend del usuario.
+         *
+         *     Emite cuatro cookies —`at`, `rt`, `XSRF-TOKEN` y `has_session`— cuyos
+         *     `Path` y banderas fija la Decision 007.
+         *
+         *     Es `security: []` por la razon obvia: quien pide una sesion todavia no
+         *     tiene ninguna. Pero **si exige `X-XSRF-TOKEN`**, porque es una mutacion;
+         *     la cookie la emite el primer `GET` que atraviesa el middleware.
+         */
+        post: operations["iniciarSesion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Quien tiene esta sesion
+         * @description Devuelve `permissions[]` ya resueltos, no solo los roles: asi el
+         *     frontend oculta lo que no aplica sin reimplementar el modelo de
+         *     permisos. **Ocultar es conveniencia, no seguridad** — la autorizacion
+         *     real vive en el servidor, en el permiso declarado de cada ruta.
+         *
+         *     No exige ningun permiso con nombre, solo sesion: todo el mundo puede
+         *     leer su propio perfil.
+         */
+        get: operations["miPerfil"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/public/settings": {
         parameters: {
             query?: never;
@@ -159,6 +213,56 @@ export interface components {
             };
             /** @description Presente cuando algo fallo. Es lo que se busca en el log. */
             traceId?: string;
+        };
+        /**
+         * @description `additionalProperties: false` a proposito: un campo de mas es un `400` y
+         *     no algo que se ignora en silencio. Es el mismo criterio que
+         *     `SettingNuevo`.
+         */
+        Credenciales: {
+            /**
+             * @description No se normaliza a minusculas en el cliente ni en el servidor: quien
+             *     garantiza que `Ana@casa.com` y `ana@casa.com` son la misma cuenta es
+             *     el tipo `citext` de la columna.
+             * @example superadmin@go-starter.localhost
+             */
+            email: string;
+            /**
+             * Format: password
+             * @description El maximo no es una regla de seguridad sino de recursos: argon2
+             *     procesa lo que le den, y un campo de diez megas ocupa un nucleo
+             *     entero.
+             */
+            password: string;
+        };
+        /**
+         * @description Lo unico que el frontend sabe del usuario. `permissions[]` son los
+         *     efectivos, ya resueltos por sus roles.
+         */
+        Perfil: {
+            /** Format: uuid */
+            id: string;
+            /** @example superadmin@go-starter.localhost */
+            email: string;
+            /** @example Superadmin de desarrollo */
+            displayName: string;
+            /**
+             * @example [
+             *       "superadmin"
+             *     ]
+             */
+            roles: string[];
+            /**
+             * @description Vacio es `[]`, jamas `null`: un cliente que hace `.includes()` sobre
+             *     null revienta, y la diferencia entre "sin permisos" y "no vino el
+             *     campo" no le sirve a nadie.
+             * @example [
+             *       "identity.user.read",
+             *       "settings.read",
+             *       "settings.write"
+             *     ]
+             */
+            permissions: string[];
         };
         /**
          * @description Clave a valor. El valor es JSON libre: el esquema por clave se valida en
@@ -289,9 +393,23 @@ export interface components {
          *     negacion de servicio de una linea.
          */
         Size: number;
+        /**
+         * @description El valor de la cookie `XSRF-TOKEN`, reenviado a mano. Es el doble envio:
+         *     quien no puede leer la cookie —otro origen— no puede forjar la cabecera.
+         *
+         *     Se declara aqui, y no solo en el middleware, para que el cliente
+         *     generado sepa que la operacion la necesita.
+         * @example 8f14e45fceea167a5a36dedd4bea2543
+         */
+        XsrfToken: string;
     };
     requestBodies: never;
     headers: {
+        /**
+         * @description Segundos que faltan para poder reintentar.
+         * @example 900
+         */
+        RetryAfter: number;
         /**
          * @description La version del recurso. Es lo que se manda en `If-Match` para
          *     modificarlo sin pisar el cambio de otra persona.
@@ -374,6 +492,94 @@ export interface operations {
                     "application/json": components["schemas"]["Readiness"];
                 };
             };
+        };
+    };
+    iniciarSesion: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description El valor de la cookie `XSRF-TOKEN`, reenviado a mano. Es el doble envio:
+                 *     quien no puede leer la cookie —otro origen— no puede forjar la cabecera.
+                 *
+                 *     Se declara aqui, y no solo en el middleware, para que el cliente
+                 *     generado sepa que la operacion la necesita.
+                 * @example 8f14e45fceea167a5a36dedd4bea2543
+                 */
+                "X-XSRF-TOKEN": components["parameters"]["XsrfToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Credenciales"];
+            };
+        };
+        responses: {
+            /**
+             * @description Sesion iniciada. Las cookies van en `Set-Cookie`; no se declaran
+             *     aqui como cabecera de respuesta porque son cuatro y OpenAPI no sabe
+             *     describir `Set-Cookie` repetida.
+             */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            /**
+             * @description Credenciales invalidas. **Correo inexistente, contrasena incorrecta
+             *     y cuenta deshabilitada responden identico**: distinguirlos convierte
+             *     el login en un oraculo de que correos estan registrados.
+             */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            /**
+             * @description Demasiados intentos. El contador va por correo **y** por IP,
+             *     independientes: solo por IP se saltea con NAT, y solo por correo
+             *     deja bloquear a un tercero a voluntad.
+             */
+            429: {
+                headers: {
+                    "Retry-After": components["headers"]["RetryAfter"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            500: components["responses"]["Problem"];
+        };
+    };
+    miPerfil: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El perfil de quien hace la peticion */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Perfil"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
         };
     };
     listarSettingsPublicas: {

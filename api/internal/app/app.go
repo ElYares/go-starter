@@ -15,6 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/elyares/go-starter/api/internal/platform/auth"
 	"github.com/elyares/go-starter/api/internal/platform/config"
 	"github.com/elyares/go-starter/api/internal/platform/db"
 	"github.com/elyares/go-starter/api/internal/platform/httpx"
@@ -38,6 +39,13 @@ type App struct {
 	spec   []byte
 	perms  *rbac.Registry
 	router *httpx.Router
+
+	// Las piezas de sesion de la cadena global. El firmante aqui SOLO verifica
+	// —quien emite es el modulo de identidad, que es el unico que sabe a quien
+	// dejar entrar— y es el mismo objeto, asi que la llave no puede divergir.
+	firmante *auth.Firmante
+	emisor   *auth.Emisor
+	resolver auth.ResolverActor
 }
 
 func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error) {
@@ -71,11 +79,39 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		}
 	}
 
-	if err := a.montar(Modules(cfg, pool)); err != nil {
+	if err := a.armarSesion(cfg.JWTSigningKey, cfg.CookieSecure); err != nil {
+		return nil, err
+	}
+
+	mods, err := Modules(cfg, pool)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := a.montar(mods); err != nil {
 		return nil, err
 	}
 
 	return a, nil
+}
+
+// armarSesion construye las piezas que la cadena global necesita para leer una
+// sesion. Es un metodo aparte y no codigo suelto dentro de New para que las
+// pruebas armen la MISMA cadena que produccion: un Handler() que solo funciona
+// si se paso por New es un Handler() que nadie prueba, y la primera vez que se
+// ejercita de verdad es en el primer despliegue.
+//
+// El firmante de aqui solo verifica. Quien emite es el modulo de identidad, y
+// es el mismo objeto que arma Modules a partir de la misma llave, asi que no
+// pueden divergir.
+func (a *App) armarSesion(llave string, secure bool) error {
+	firmante, err := auth.NewFirmante(llave)
+	if err != nil {
+		return err
+	}
+	a.firmante = firmante
+	a.emisor = auth.NewEmisor(secure)
+	return nil
 }
 
 // montar cataloga los permisos declarados, deja que cada modulo registre sus
@@ -97,6 +133,24 @@ func (a *App) montar(mods []Module) error {
 	for _, m := range mods {
 		m.Routes(r)
 		a.log.Debug("modulo montado", slog.String("modulo", m.Name()))
+
+		if resolver, ok := m.(ResolverDeActores); ok {
+			if a.resolver != nil {
+				// Dos modulos resolviendo actores es ambiguo: el que ganara
+				// dependeria del orden del registro, y los permisos de una
+				// peticion saldrian de uno u otro sin que nadie pueda decir
+				// cual. Mejor no levantar.
+				return fmt.Errorf("mas de un modulo resuelve actores; el ultimo es %s", m.Name())
+			}
+			a.resolver = resolver.Actor
+		}
+	}
+
+	if a.resolver == nil {
+		// Un fork puede haber borrado identity. Sin quien resuelva actores, toda
+		// peticion es anonima y las rutas con guard responden 401: correcto para
+		// una instalacion sin identidad, y peligroso de descubrir en produccion.
+		a.log.Warn("ningun modulo resuelve actores: ninguna peticion tendra sesion")
 	}
 
 	if err := rbac.VerifyRoutes(r.Routes(), reg); err != nil {
@@ -142,7 +196,25 @@ func (a *App) Handler() http.Handler {
 		observ.TraceID,
 		httpx.Recover(a.log),
 		observ.RequestLogger(a.log),
+		// CSRF antes que sesion: una mutacion forjada se rechaza sin haber
+		// gastado una consulta en resolver quien la manda.
+		auth.CSRF(a.emisor),
+		// Y sesion despues, pero SIEMPRE antes del router: el guard de cada ruta
+		// lee el actor del contexto, asi que si esto corriera despues, toda ruta
+		// protegida responderia 401 con una cookie perfectamente valida.
+		auth.Sesion(a.firmante, a.resolverActor, a.log),
 	)
+}
+
+// resolverActor envuelve al resolver del modulo para que la cadena se pueda
+// armar aunque no haya ninguno. Sin esto, un fork sin identidad pasaria una
+// funcion nil al middleware y la primera peticion con cookie entraria en
+// panico en vez de quedarse anonima.
+func (a *App) resolverActor(ctx context.Context, userID string) (rbac.Actor, error) {
+	if a.resolver == nil {
+		return rbac.Actor{}, errors.New("app: ningun modulo resuelve actores")
+	}
+	return a.resolver(ctx, userID)
 }
 
 // errorDeParametro traduce los fallos de enlace del codigo generado a la forma
