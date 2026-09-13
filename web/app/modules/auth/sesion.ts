@@ -9,11 +9,7 @@ import type { Schemas } from '~/shared/api/generated'
 export type Perfil = Schemas['Perfil']
 export type Credenciales = Schemas['Credenciales']
 
-/**
- * La pista de sesion (Decision 007). No es una credencial: dice "hubo sesion"
- * para que una carga sin ella no pida `me` y reciba un 401 que ya se sabia.
- */
-export const COOKIE_PISTA = 'has_session'
+export { COOKIE_PISTA } from '~/shared/api/client'
 
 export const RUTA_LOGIN = '/login'
 const DESTINO_POR_OMISION = '/admin'
@@ -29,6 +25,19 @@ export async function iniciarSesion(api: ClienteApi, credenciales: Credenciales)
 
 export function pedirPerfil(api: ClienteApi): Promise<Perfil> {
   return api.get<Perfil>('/auth/me')
+}
+
+/**
+ * Cierra la sesion en el servidor. Si falla, NO lanza: el servidor borra las
+ * cookies aunque su base falle, y quien pulso "cerrar sesion" tiene que salir
+ * igual. Lo que no se puede es dejarlo dentro creyendo que salio.
+ */
+export async function cerrarSesion(api: ClienteApi): Promise<void> {
+  try {
+    await api.post<void>('/auth/logout')
+  } catch {
+    // El traceId del fallo queda en el log del servidor.
+  }
 }
 
 /**
@@ -117,8 +126,9 @@ export type Acceso =
  *   alguien porque el servidor se cayo le hace perder lo que estaba haciendo, y
  *   al volver el servidor seguiria teniendo sesion
  *
- * Falta el reintento con refresh ante el 401 de `me`, que llega con CU-002.
- * Hasta entonces, un `at` caducado —quince minutos— lleva al login.
+ * El `at` caducado no llega aqui como 401: el cliente renueva y reintenta `me`
+ * antes de devolver nada (CU-002). Un 401 que SI llega es que no habia sesion
+ * que renovar.
  */
 export async function decidirAcceso(entrada: {
   perfil: Perfil | null

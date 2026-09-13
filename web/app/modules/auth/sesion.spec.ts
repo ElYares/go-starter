@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ClienteApi } from '~/shared/api/client'
 import { ApiError } from '~/shared/api/errors'
 import {
+  cerrarSesion,
   decidirAcceso,
   destinoSeguro,
   esRutaProtegida,
@@ -216,5 +217,28 @@ describe('decidirAcceso', () => {
         },
       }),
     ).rejects.toBeInstanceOf(RangeError)
+  })
+})
+
+describe('cerrarSesion', () => {
+  it('llama al logout', async () => {
+    const api: ClienteApi = { post: vi.fn(async () => undefined as never), get: vi.fn() }
+
+    await cerrarSesion(api)
+
+    expect(api.post).toHaveBeenCalledWith('/auth/logout')
+  })
+
+  // Quien pulso "cerrar sesion" sale igual: el servidor borra las cookies
+  // aunque su base falle, y un error aqui lo dejaria dentro creyendo que salio.
+  it('no lanza si el servidor falla', async () => {
+    const api: ClienteApi = {
+      post: vi.fn(async () => {
+        throw apiError(502)
+      }),
+      get: vi.fn(),
+    }
+
+    await expect(cerrarSesion(api)).resolves.toBeUndefined()
   })
 })
