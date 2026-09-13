@@ -158,14 +158,41 @@ Etapas del cliente, **en este orden**:
 
 1. **Refresh:** ante un `401`, intenta `POST /auth/refresh` **una vez** y
    reintenta la petición original. Con exclusión explícita de la ruta de refresh
-   (ver `06-flujos.md`) y una sola promesa compartida para peticiones en vuelo.
-   **Todavía no existe:** llega con CU-002, cuando exista el endpoint
+   (ver `06-flujos.md`) y una sola promesa compartida para peticiones en vuelo
 2. **Normalización:** todo fallo sale como `ApiError` (`shared/api/errors.ts`),
    nunca como error crudo. Un `502` de Caddy trae HTML y sale igual como
    `ApiError`, no como un `SyntaxError` de JSON
 
 Invertir el orden deja al refresh sin la configuración original que necesita
 para reintentar.
+
+Lo que decide si un fallo se renueva, y por qué cada condición:
+
+- **Solo un `401`.** Un `403` es un permiso que falta: renovar no lo arregla y
+  rota las cookies de todas las pestañas por nada
+- **Solo con la cookie `has_session`.** Sin ella no hubo sesión, y cada carga
+  anónima pediría un refresh que responde `401`
+- **Nunca en `/auth/refresh`, `/auth/login` ni `/auth/logout`.** El `401` del
+  login son credenciales malas, no una sesión caducada
+- **Una vez.** Si el reintento vuelve a dar `401`, sale el error
+- **Si el refresh cae, sale la caída y no un `401`**: el guard tiene que poder
+  mostrar el error en vez de mandar al login
+
+**La carrera entre pestañas la ordena el cliente, con Web Locks**
+(`navigator.locks`, candado `go-starter:refresh`). El servidor trata todo reuso
+de un `rt` como robo y revoca todas las sesiones, así que dos pestañas que
+renuevan a la vez con el mismo `rt` expulsarían a la persona. Con el candado, la
+segunda espera; al entrar compara `XSRF-TOKEN` con el que había al mandar su
+petición —el refresh lo rota— y si cambió, reintenta sin renovar.
+
+**Esa comparación solo cuenta si había token al salir.** Tras reiniciar el
+navegador, la cookie CSRF —de sesión— desaparece y `has_session` no; el primer
+`GET` siembra una nueva, y compararla con "nada" parecería una renovación ajena:
+se saltaría el refresh y un `rt` válido acabaría en el login.
+
+**Cerrar sesión no lanza aunque el servidor falle.** El servidor borra las
+cookies incluso si su base no responde, y el perfil se vacía antes de navegar
+al login: si quedara, el botón de atrás volvería a `/admin` sin preguntar.
 
 **El CSRF lo pone el cliente, y lo lee de la cookie en cada petición.** El
 login rota el token: una copia en memoria manda el viejo y responde `403` justo

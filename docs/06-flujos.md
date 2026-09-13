@@ -49,24 +49,47 @@ sequenceDiagram
     participant G as Go /api
     participant D as Postgres
 
-    N->>G: POST /api/v1/auth/refresh (cookie rt)
+    N->>G: POST /api/v1/auth/refresh (cookie rt) + X-XSRF-TOKEN
     G->>D: buscar por SHA-256(rt)
-    alt no existe o expiró
-        G-->>N: 401, borra cookies
+    alt no existe, revocado o expiró
+        G-->>N: 401, borra las cuatro cookies
     else ya fue usado (replaced_by no es null)
-        G->>D: revocar TODA la cadena de ese usuario
+        G->>D: revocar TODAS las sesiones de ese usuario
         G-->>N: 401 — el token viejo circulando significa robo
     else válido
-        G->>D: compare-and-set: marcar usado y encadenar replaced_by
-        G-->>N: 204 + at, rt nuevos, XSRF-TOKEN rotado
+        G->>D: tx: insert sucesora + update ... where replaced_by is null
+        alt el update afectó 1 fila
+            G-->>N: 204 + at, rt nuevos, XSRF-TOKEN rotado
+        else 0 filas: otra petición llegó primero
+            G->>D: releer: si la rotó, es reuso → revocar todo
+            G-->>N: 401
+        end
     end
 ```
 
 - **`replaced_by` es lo que convierte la rotación en detección.** Sin él, rotar
   solo acorta la vida útil del token robado; con él, el uso del token viejo
   delata al ladrón y cae la sesión entera
-- La carrera (dos pestañas refrescando a la vez) la cierra un *compare-and-set*
-  en SQL, no un bloqueo en Go: dos procesos no comparten memoria, pero sí base
+- **`replaced_by` apunta a la sucesora**, no a la predecesora: "¿ya se rotó?"
+  se responde con la fila que ya se cargó, sin preguntar quién apunta a mí
+- **Todo reuso es robo, sin ventana de gracia.** Una ventana dejaría sin detectar
+  el robo cuyo reuso caiga dentro. La carrera legítima —dos pestañas del mismo
+  navegador con el mismo `rt`— no llega al servidor: la ordena el cliente con
+  **Web Locks**, porque el mismo `rt` solo existe dos veces en un cookie jar.
+  Ver `07-frontend.md`
+- El *compare-and-set* en SQL sigue siendo el que garantiza que un token rota
+  una sola vez, con cualquier cliente: bajo `READ COMMITTED` la segunda
+  transacción se bloquea en la fila y al soltarse afecta cero filas. Un bloqueo
+  en Go no sirve con dos procesos
+- **"Revocado" se mira antes que "ya rotado".** La revocación general marca
+  también los tokens viejos, así que un robo se detecta una vez. Al revés, quien
+  guarde un `rt` viejo lo repetiría para echar a la víctima cada vez que vuelva
+  a entrar
+- `revoked_at is null` en el `WHERE` hace que un logout concurrente le gane al
+  refresh, y ese caso no cuenta como robo
+- **Lo que no se revoca:** el `at`. Es un token firmado y vive sus quince minutos
+  aunque la sesión se haya cerrado o se haya detectado un robo
+- Deshabilitar la cuenta corta la sesión en el siguiente refresh
 - **Exclusión obligatoria:** el interceptor del cliente **no** debe reintentar
   `/auth/refresh`. Si el `401` del refresh vuelve a entrar al interceptor, este
   se encuentra su propia promesa en vuelo y se pone a esperarla: el síntoma no
