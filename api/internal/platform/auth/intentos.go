@@ -16,7 +16,7 @@ const (
 	VentanaIntento = 15 * time.Minute
 )
 
-// Intentos cuenta los fallos recientes. Vive en memoria, con barrido.
+// Intentos cuenta los fallos recientes. Vive en memoria, y se barre solo.
 //
 // **Lo que esto NO resuelve, escrito para que nadie lo descubra tarde:** el
 // contador se pierde al reiniciar el proceso y no se comparte entre instancias,
@@ -29,6 +29,8 @@ type Intentos struct {
 	mu     sync.Mutex
 	fallos map[string][]time.Time
 	ahora  func() time.Time
+	// ultimoBarrido es cuando `Fallo` barrio por ultima vez. Ver `Fallo`.
+	ultimoBarrido time.Time
 }
 
 func NewIntentos() *Intentos {
@@ -60,12 +62,26 @@ func (i *Intentos) Permitido(claves ...string) (bool, time.Duration) {
 	return true, 0
 }
 
-// Fallo anota un intento fallido en cada clave.
+// Fallo anota un intento fallido en cada clave, y de paso barre.
+//
+// El barrido va aqui, y no en una goroutine con su propio reloj, porque `Fallo`
+// es lo UNICO que hace crecer el mapa: barrer en el mismo sitio que lo llena
+// acota la memoria sin que nadie tenga que acordarse de arrancar nada. Antes
+// habia un `BarrerCada` que decia "lo arranca app", y app no lo arrancaba: el
+// mapa crecia con cada correo inventado que alguien mandara, para siempre.
+//
+// Se barre como mucho una vez por ventana, asi que el costo —recorrer el mapa
+// con el candado tomado— se reparte entre muchos fallos y no cae en cada uno.
 func (i *Intentos) Fallo(claves ...string) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
 	ahora := i.ahora()
+	if ahora.Sub(i.ultimoBarrido) >= VentanaIntento {
+		i.barrer(ahora)
+		i.ultimoBarrido = ahora
+	}
+
 	for _, k := range claves {
 		i.fallos[k] = append(i.vigentes(k, ahora), ahora)
 	}
@@ -106,12 +122,17 @@ func (i *Intentos) vigentes(clave string, ahora time.Time) []time.Time {
 // Hace falta porque `vigentes` solo poda las claves que alguien vuelve a tocar:
 // sin barrido, cada correo que se intento una vez se queda en el mapa para
 // siempre y el limite de intentos se convierte en una fuga de memoria que
-// cualquiera puede alimentar desde fuera.
+// cualquiera puede alimentar desde fuera. `Fallo` lo hace solo; esto queda para
+// forzarlo.
 func (i *Intentos) Barrer() {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
-	ahora := i.ahora()
+	i.barrer(i.ahora())
+}
+
+// barrer es Barrer con el candado ya tomado.
+func (i *Intentos) barrer(ahora time.Time) {
 	for k := range i.fallos {
 		if vivos := i.vigentes(k, ahora); len(vivos) == 0 {
 			delete(i.fallos, k)
@@ -119,24 +140,6 @@ func (i *Intentos) Barrer() {
 			i.fallos[k] = vivos
 		}
 	}
-}
-
-// BarrerCada deja el barrido corriendo hasta que se cancele el contexto. Lo
-// arranca `app`; el contexto es el del proceso, asi que la goroutine muere con
-// el y no se queda colgada en las pruebas.
-func (i *Intentos) BarrerCada(hecho <-chan struct{}, cada time.Duration) {
-	t := time.NewTicker(cada)
-	go func() {
-		defer t.Stop()
-		for {
-			select {
-			case <-hecho:
-				return
-			case <-t.C:
-				i.Barrer()
-			}
-		}
-	}()
 }
 
 // ClaveEmail y ClaveIP separan los espacios de nombres de las dos cuentas.

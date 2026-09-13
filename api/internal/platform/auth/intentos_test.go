@@ -166,6 +166,26 @@ func TestElBarridoTiraLoQueYaNoCuenta(t *testing.T) {
 	}
 }
 
+// El barrido tiene que ocurrir SIN que nadie lo llame. La version anterior
+// dependia de un `BarrerCada` que ningun codigo arrancaba, y las dos pruebas de
+// arriba pasaban igual porque llaman a `Barrer` a mano: afirmaban que barrer
+// funciona, no que se barre.
+func TestLosFallosBarrenSolosLoQueYaNoCuenta(t *testing.T) {
+	reloj := time.Now()
+	i := intentosConReloj(&reloj)
+
+	for _, e := range []string{"a@x.com", "b@x.com", "c@x.com"} {
+		i.Fallo(ClaveEmail(e))
+	}
+
+	reloj = reloj.Add(VentanaIntento + time.Second)
+	i.Fallo(ClaveEmail("nuevo@x.com"))
+
+	if len(i.fallos) != 1 {
+		t.Errorf("claves = %d; los fallos viejos tenian que irse con el siguiente fallo", len(i.fallos))
+	}
+}
+
 // Y el barrido no se lleva lo que todavia cuenta, que seria regalar intentos.
 func TestElBarridoNoTiraLoQueTodaviaCuenta(t *testing.T) {
 	reloj := time.Now()
