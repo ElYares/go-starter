@@ -122,6 +122,13 @@ func (m *Module) Routes(r *httpx.Router) {
 		// contrato. Que haya que tocar esa lista es el punto.
 		r.Post("/login", w.IniciarSesion)
 
+		// Sin guard por la misma razon que el login: se llama justo cuando el
+		// `at` ya caduco. Lo que autentica es el `rt` de la cookie, y el CSRF de
+		// la cadena global exige la cabecera. Van como excepcion en la prueba de
+		// contrato de app.
+		r.Post("/refresh", w.RenovarSesion)
+		r.Post("/logout", w.CerrarSesion)
+
 		// Sesion y nada mas: todo el mundo puede leer su propio perfil, asi que
 		// no hay permiso con nombre que pedir. Ver rbac.RequireSession.
 		r.Get("/me", w.MiPerfil, rbac.RequireSession())
@@ -288,4 +295,54 @@ func (m *Module) SembrarSuperadminDeDesarrollo(ctx context.Context, email, passw
 		Roles:       []string{RolSuperadmin},
 	})
 	return err
+}
+
+// RenovarSesion responde 204 y las cuatro cookies nuevas, o 401 y ninguna.
+//
+// En un 401 se BORRAN las cuatro, incluida `has_session`. Sin eso, la pista
+// seguiria diciendole al cliente que hay sesion y cada carga pediria un refresh
+// condenado a fallar.
+func (m *Module) RenovarSesion(w http.ResponseWriter, r *http.Request, _ RenovarSesionParams) {
+	sesion, err := m.svc.Renovar(r.Context(), RenovacionDeSesion{
+		RefreshToken: refreshDeLaCookie(r),
+		IP:           httpx.ClientIP(r),
+		UserAgent:    recortar(r.UserAgent(), maxUserAgent),
+	})
+	if err != nil {
+		var p *httpx.Problem
+		if errors.As(err, &p) && p.Status == http.StatusUnauthorized {
+			m.emisor.Limpiar(w)
+		}
+		escribirError(w, r, err)
+		return
+	}
+
+	m.emisor.Emitir(w, sesion.AccessToken, sesion.RefreshToken, sesion.TokenCSRF)
+	httpx.NoContent(w)
+}
+
+// CerrarSesion revoca el `rt` y borra las cookies.
+//
+// Las cookies se borran AUNQUE la base falle. El navegador sale de la sesion
+// igual, y el 500 deja constancia —con su traceId— de que el token pudo quedar
+// vivo en la base. Al reves, un error dejaria a la persona dentro creyendo que
+// salio.
+func (m *Module) CerrarSesion(w http.ResponseWriter, r *http.Request, _ CerrarSesionParams) {
+	err := m.svc.CerrarSesion(r.Context(), refreshDeLaCookie(r))
+	m.emisor.Limpiar(w)
+	if err != nil {
+		escribirError(w, r, err)
+		return
+	}
+	httpx.NoContent(w)
+}
+
+// refreshDeLaCookie devuelve el `rt` o vacio. Que falte la cookie no es un
+// error de parametro sino una sesion que no existe, y eso lo decide el service.
+func refreshDeLaCookie(r *http.Request) string {
+	c, err := r.Cookie(auth.CookieRT)
+	if err != nil {
+		return ""
+	}
+	return c.Value
 }

@@ -418,3 +418,96 @@ func (r *Repo) guardarRefresh(ctx context.Context, s SesionNueva) error {
 
 	return traducir(err)
 }
+
+// refreshPorHash busca la sesion por el hash del token que trae la cookie.
+func (r *Repo) refreshPorHash(ctx context.Context, hash []byte) (RefreshGuardado, error) {
+	var g RefreshGuardado
+	err := r.pool.QueryRow(ctx,
+		`select id, user_id, replaced_by, revoked_at, expires_at
+		   from refresh_tokens
+		  where token_hash = $1`, hash).
+		Scan(&g.ID, &g.UserID, &g.ReemplazadoPor, &g.RevocadoEn, &g.ExpiraEn)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return RefreshGuardado{}, errNoExiste
+	}
+	return g, err
+}
+
+// rotarRefresh cambia una sesion por su sucesora, o no hace nada.
+//
+// **El compare-and-set es el WHERE del update**, y el conteo de filas es la
+// senal. Bajo READ COMMITTED, dos rotaciones simultaneas del mismo token se
+// bloquean en la fila; la segunda, al soltarse, reevalua el predicado contra la
+// version ya escrita y afecta cero filas. Leer en Go "replaced_by es nulo" y
+// escribir despues deja la ventana en la que las dos leen nulo y las dos rotan:
+// dos refresh validos de una sola sesion. Un mutex en Go no la cierra con dos
+// procesos.
+//
+// El orden dentro de la transaccion no es negociable: `replaced_by` es una
+// llave foranea a la misma tabla, asi que la sucesora se inserta ANTES de que
+// la anterior pueda apuntarla. Si el update no afecta nada, el rollback se
+// lleva tambien la fila insertada.
+//
+// `revoked_at is null` hace que un logout concurrente le gane al refresh: si la
+// persona cerro la sesion, renovarla no la resucita. Y `expires_at > now()`
+// repite en la base lo que el service ya comprobo, porque el reloj que cuenta
+// es el de la base.
+func (r *Repo) rotarRefresh(ctx context.Context, anteriorID string, nueva SesionNueva) (bool, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var ip, ua *string
+	if nueva.IP != "" {
+		ip = &nueva.IP
+	}
+	if nueva.UserAgent != "" {
+		ua = &nueva.UserAgent
+	}
+
+	if _, err := tx.Exec(ctx,
+		`insert into refresh_tokens (id, user_id, token_hash, expires_at, user_agent, ip)
+		      values ($1, $2, $3, $4, $5, $6)`,
+		nueva.ID, nueva.UserID, nueva.TokenHash, nueva.ExpiraEn, ua, ip); err != nil {
+		return false, traducir(err)
+	}
+
+	tag, err := tx.Exec(ctx,
+		`update refresh_tokens
+		    set replaced_by = $1
+		  where id = $2
+		    and replaced_by is null
+		    and revoked_at is null
+		    and expires_at > now()`,
+		nueva.ID, anteriorID)
+	if err != nil {
+		return false, err
+	}
+	if tag.RowsAffected() != 1 {
+		return false, nil
+	}
+
+	return true, tx.Commit(ctx)
+}
+
+// revocarSesionesDe tumba todas las sesiones vivas de una persona. Es la
+// respuesta a un refresh reusado: la cadena siguio sin ese token, asi que otra
+// copia circula, y no hay forma de saber cual de las dos es la legitima.
+func (r *Repo) revocarSesionesDe(ctx context.Context, userID string) error {
+	_, err := r.pool.Exec(ctx,
+		`update refresh_tokens set revoked_at = now()
+		  where user_id = $1 and revoked_at is null`, userID)
+	return err
+}
+
+// revocarRefresh cierra UNA sesion, la del token que se presenta. Revocar un
+// token que no existe o que ya estaba revocado no es un error: es el mismo
+// estado final.
+func (r *Repo) revocarRefresh(ctx context.Context, hash []byte) error {
+	_, err := r.pool.Exec(ctx,
+		`update refresh_tokens set revoked_at = now()
+		  where token_hash = $1 and revoked_at is null`, hash)
+	return err
+}

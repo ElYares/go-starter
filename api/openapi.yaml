@@ -178,6 +178,81 @@ paths:
         "500":
           $ref: "#/components/responses/Problem"
 
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: Renovar la sesion
+      description: |
+        Cambia el `rt` de la cookie por un par nuevo —`at` y `rt`— y rota
+        `XSRF-TOKEN`. Responde `204` sin cuerpo y reemite las cuatro cookies.
+
+        El `rt` viaja en su cookie (`Path=/api/v1/auth`, HttpOnly) y **no se
+        declara como parametro**: si lo fuera, una peticion sin la cookie
+        responderia `400` de parametro faltante en vez del `401` que la trata
+        como lo que es, una sesion que no existe.
+
+        Es `security: []` porque justo se llama cuando el `at` ya caduco. Exige
+        `X-XSRF-TOKEN`, como toda mutacion.
+
+        **Rotacion con deteccion de robo** (CU-002): cada `rt` sirve una sola
+        vez. Presentar uno que ya se roto significa que otra copia sigue
+        circulando, y revoca **todas** las sesiones de esa persona. La carrera
+        entre pestanas de un mismo navegador no llega aqui: la ordena el cliente
+        con un candado entre pestanas.
+      operationId: renovarSesion
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/XsrfToken"
+      responses:
+        "204":
+          description: |
+            Sesion renovada. Las cuatro cookies van en `Set-Cookie`, igual que
+            en el login.
+        "401":
+          description: |
+            No hay sesion que renovar: sin cookie `rt`, desconocido, caducado,
+            revocado o ya usado. **Borra las cuatro cookies** —incluida
+            `has_session`— para que el cliente no vuelva a intentarlo.
+
+            Los cinco casos responden identico. Distinguir "ya usado" le diria a
+            quien robo el token que lo detectaron.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Cerrar la sesion
+      description: |
+        Revoca el `rt` de la cookie y borra las cuatro cookies. Un `rt` revocado
+        no renueva: el `at` que quede vivo caduca solo, como mucho en quince
+        minutos, porque un token firmado no se puede revocar.
+
+        **Siempre responde `204`**, haya cookie o no y exista o no el token:
+        cerrar una sesion que ya no esta es cerrarla, y un error aqui dejaria al
+        cliente sin saber si sigue dentro.
+
+        Es `security: []` por la misma razon que el refresh: tiene que funcionar
+        con el `at` caducado. Exige `X-XSRF-TOKEN`: sin eso, cualquier sitio
+        podria cerrarle la sesion a quien lo visite.
+      operationId: cerrarSesion
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/XsrfToken"
+      responses:
+        "204":
+          description: Sesion cerrada y cookies borradas
+        "403":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
   /public/settings:
     get:
       tags: [settings]

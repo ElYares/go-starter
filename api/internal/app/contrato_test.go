@@ -57,6 +57,11 @@ func TestLoPublicoViveBajoSuPrefijoSalvoLasExcepcionesEscritas(t *testing.T) {
 		// anota ningun permiso en la ruta, desde aqui se ve igual que una ruta
 		// sin proteger, y por eso tiene que estar escrita.
 		"GET /api/v1/auth/me": true,
+		// Refresh y logout tampoco exigen sesion: se llaman con el `at` ya
+		// caducado. Los autentica el `rt` de su cookie, y el CSRF de la cadena
+		// global les exige la cabecera como a toda mutacion.
+		"POST /api/v1/auth/refresh": true,
+		"POST /api/v1/auth/logout":  true,
 		// La UI de exploracion del contrato. Solo existe con API_DOCS_ENABLED y
 		// no es superficie publica de la API, por eso tampoco esta en el spec.
 		"GET /api/v1/docs":         true,

@@ -199,3 +199,25 @@ type PerfilDeUsuario struct {
 	Roles    []string
 	Permisos []string
 }
+
+// RenovacionDeSesion es lo que llega al refresh: el `rt` de la cookie y el
+// contexto de la peticion, que queda en la fila nueva igual que en el login.
+type RenovacionDeSesion struct {
+	RefreshToken string
+	IP           string
+	UserAgent    string
+}
+
+// RefreshGuardado es una fila de `refresh_tokens` vista desde el refresh.
+//
+// `ReemplazadoPor` apunta al SUCESOR, no al predecesor: "a esta fila la
+// reemplazo aquella". Asi "ya se roto?" se responde con la fila que ya se tiene
+// en la mano, sin preguntarle a la base quien apunta a mi. Es la Decision 012
+// del proyecto hermano, que llego a esa forma despues de haber hecho la otra.
+type RefreshGuardado struct {
+	ID             string
+	UserID         string
+	ReemplazadoPor *string
+	RevocadoEn     *time.Time
+	ExpiraEn       time.Time
+}

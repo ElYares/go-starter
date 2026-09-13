@@ -49,6 +49,21 @@ type repoFalso struct {
 	errAlQuitarRol      error
 	errAlDeshabilitar   error
 	errAlGuardarRefresh error
+
+	// refresh son las filas de `refresh_tokens`, por id, con su hash. Imitan el
+	// estado que el refresh lee y escribe; ver refresh_falso_test.go.
+	refresh map[string]*filaRefresh
+	// antesDeRotar deja simular que otra peticion cambio la fila entre la
+	// lectura del service y su compare-and-set, que es justo la ventana que el
+	// WHERE del update de verdad cierra.
+	antesDeRotar func()
+	// vecesQueSeRevocoTodo cuenta las revocaciones generales: es la unica forma
+	// de distinguir "se detecto robo" de "solo se rechazo".
+	vecesQueSeRevocoTodo int
+	// vecesQueSeIntentoRotar distingue "rechazado antes de gastar nada" de
+	// "rechazado por el compare-and-set despues de firmar tokens y abrir una
+	// transaccion". El resultado HTTP es el mismo; el trabajo no.
+	vecesQueSeIntentoRotar int
 }
 
 func (r *repoFalso) guardarRefresh(_ context.Context, s SesionNueva) error {
@@ -56,11 +71,12 @@ func (r *repoFalso) guardarRefresh(_ context.Context, s SesionNueva) error {
 		return r.errAlGuardarRefresh
 	}
 	r.sesiones = append(r.sesiones, s)
+	r.registrarRefresh(s)
 	return nil
 }
 
 func nuevoRepoFalso() *repoFalso {
-	return &repoFalso{porEmail: map[string]*filaFalsa{}, roles: map[string][]string{}}
+	return &repoFalso{porEmail: map[string]*filaFalsa{}, roles: map[string][]string{}, refresh: map[string]*filaRefresh{}}
 }
 
 func (r *repoFalso) crear(_ context.Context, u Usuario, hash string) (Usuario, error) {
