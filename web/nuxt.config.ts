@@ -16,6 +16,10 @@ export default defineNuxtConfig({
   routeRules: {
     '/**': { ssr: true },
     '/admin/**': { ssr: false },
+    // El login tampoco: no hay nada que indexar, y un formulario renderizado en
+    // servidor se puede enviar ANTES de hidratar. Ese envio es el nativo del
+    // navegador —un GET a la misma URL— y no pasa por el cliente ni por el CSRF.
+    '/login': { ssr: false },
   },
 
   runtimeConfig: {
