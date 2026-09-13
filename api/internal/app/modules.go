@@ -9,6 +9,7 @@ import (
 
 	"github.com/elyares/go-starter/api/internal/modules/identity"
 	"github.com/elyares/go-starter/api/internal/modules/settings"
+	"github.com/elyares/go-starter/api/internal/platform/auth"
 	"github.com/elyares/go-starter/api/internal/platform/config"
 	"github.com/elyares/go-starter/api/internal/platform/db"
 	"github.com/elyares/go-starter/api/internal/platform/rbac"
@@ -24,13 +25,22 @@ import (
 // solo puede tener llave foranea hacia otro que se registre antes que el, y en
 // la practica eso significa hacia identity. Si dos se necesitan mutuamente, uno
 // de los dos esta mal cortado.
-func Modules(cfg config.Config, pool *pgxpool.Pool) []Module {
+// Devuelve error porque armar el modulo de identidad exige una llave de firma
+// valida, y un starter que arranca con una llave vacia firma tokens que
+// cualquiera puede reproducir. Es preferible no levantar.
+func Modules(cfg config.Config, pool *pgxpool.Pool) ([]Module, error) {
+	firmante, err := auth.NewFirmante(cfg.JWTSigningKey)
+	if err != nil {
+		return nil, err
+	}
+
 	return []Module{
-		identity.New(pool, cfg.IsDev()), // primero: los demas dependen de el
+		// primero: los demas dependen de el
+		identity.New(pool, cfg.IsDev(), firmante, auth.NewIntentos(), auth.NewEmisor(cfg.CookieSecure)),
 		settings.New(pool),
 		// content.New(...),    // fase 3
 		// catalog.New(...),    // <- un fork agrega su dominio aqui
-	}
+	}, nil
 }
 
 // CatalogoDePermisos lo implementa el modulo dueno de la tabla `permissions`.
@@ -47,7 +57,10 @@ type CatalogoDePermisos interface {
 // `cmd/migrate` como paso explicito del despliegue, y el arranque del servidor
 // cuando MIGRATE_ON_START esta puesto, que en la practica es solo desarrollo.
 func RunMigrations(ctx context.Context, cfg config.Config, log *slog.Logger, pool *pgxpool.Pool) error {
-	mods := Modules(cfg, pool)
+	mods, err := Modules(cfg, pool)
+	if err != nil {
+		return err
+	}
 	migratables := make([]db.Migratable, 0, len(mods))
 	for _, m := range mods {
 		migratables = append(migratables, m)
@@ -68,7 +81,10 @@ func RunMigrations(ctx context.Context, cfg config.Config, log *slog.Logger, poo
 // Es idempotente: alta, actualizacion y borrado de lo que ya nadie declara.
 // Volver a correrla no duplica nada.
 func SeedPermissions(ctx context.Context, cfg config.Config, log *slog.Logger, pool *pgxpool.Pool) error {
-	mods := Modules(cfg, pool)
+	mods, err := Modules(cfg, pool)
+	if err != nil {
+		return err
+	}
 
 	reg, err := rbac.NewRegistry(permisosDe(mods))
 	if err != nil {
@@ -118,6 +134,19 @@ func permisosDe(mods []Module) []rbac.Permission {
 	return perms
 }
 
+// ResolverDeActores lo implementa el modulo que sabe que puede hacer cada
+// usuario. Es la costura por la que el middleware de sesion —que es plataforma,
+// y por tanto no puede importar identity— llega a los permisos.
+//
+// Se declara aqui por la misma razon que las otras dos: solo un modulo la
+// implementa, y un fork que borre identity tiene que seguir compilando. Lo que
+// pasa entonces es que nadie resuelve actores, ninguna sesion se llena y todas
+// las rutas con guard responden 401 — que es lo correcto para una instalacion
+// sin modulo de identidad.
+type ResolverDeActores interface {
+	Actor(ctx context.Context, userID string) (rbac.Actor, error)
+}
+
 // SembradorDeSuperadmin lo implementa el modulo que sabe crear una cuenta.
 // Misma razon que CatalogoDePermisos para declararlo aqui y no en Module: solo
 // uno lo implementa, y un fork que borre identity tiene que seguir compilando.
@@ -133,7 +162,12 @@ type SembradorDeSuperadmin interface {
 // hiciera, borrar identity dejaria de ser "una carpeta y una linea del
 // registro" y romperia la compilacion de un binario que ni lo nombra.
 func SeedDevSuperadmin(ctx context.Context, cfg config.Config, log *slog.Logger, pool *pgxpool.Pool, email, password, nombre string) error {
-	for _, m := range Modules(cfg, pool) {
+	mods, err := Modules(cfg, pool)
+	if err != nil {
+		return err
+	}
+
+	for _, m := range mods {
 		sembrador, ok := m.(SembradorDeSuperadmin)
 		if !ok {
 			continue

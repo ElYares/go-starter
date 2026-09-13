@@ -28,6 +28,13 @@ security:
 tags:
   - name: salud
     description: Estado del proceso y de sus dependencias
+  - name: auth
+    description: |
+      Iniciar sesion y saber quien la tiene.
+
+      **Nada de esto viaja en cabeceras.** La sesion son cookies `HttpOnly`
+      sobre un solo origen: el frontend no guarda, no lee y no adjunta tokens.
+      Ver la Decision 007 y `docs/05-contratos-api.md`.
   - name: settings
     description: |
       Configuracion del sitio: marca, navegacion, pie, tema.
@@ -85,6 +92,89 @@ paths:
                 status: unavailable
                 checks: { db: down }
                 traceId: 9f2c1a7b4e0d5c68a1b3d4e5f6a7b8c9
+        "500":
+          $ref: "#/components/responses/Problem"
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Iniciar sesion
+      description: |
+        Responde `204` **sin cuerpo**: el perfil se pide con `GET /auth/me`,
+        para que haya un solo lugar que defina que sabe el frontend del usuario.
+
+        Emite cuatro cookies —`at`, `rt`, `XSRF-TOKEN` y `has_session`— cuyos
+        `Path` y banderas fija la Decision 007.
+
+        Es `security: []` por la razon obvia: quien pide una sesion todavia no
+        tiene ninguna. Pero **si exige `X-XSRF-TOKEN`**, porque es una mutacion;
+        la cookie la emite el primer `GET` que atraviesa el middleware.
+      operationId: iniciarSesion
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/XsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Credenciales"
+      responses:
+        "204":
+          description: |
+            Sesion iniciada. Las cookies van en `Set-Cookie`; no se declaran
+            aqui como cabecera de respuesta porque son cuatro y OpenAPI no sabe
+            describir `Set-Cookie` repetida.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          description: |
+            Credenciales invalidas. **Correo inexistente, contrasena incorrecta
+            y cuenta deshabilitada responden identico**: distinguirlos convierte
+            el login en un oraculo de que correos estan registrados.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "429":
+          description: |
+            Demasiados intentos. El contador va por correo **y** por IP,
+            independientes: solo por IP se saltea con NAT, y solo por correo
+            deja bloquear a un tercero a voluntad.
+          headers:
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+  /auth/me:
+    get:
+      tags: [auth]
+      summary: Quien tiene esta sesion
+      description: |
+        Devuelve `permissions[]` ya resueltos, no solo los roles: asi el
+        frontend oculta lo que no aplica sin reimplementar el modelo de
+        permisos. **Ocultar es conveniencia, no seguridad** — la autorizacion
+        real vive en el servidor, en el permiso declarado de cada ruta.
+
+        No exige ningun permiso con nombre, solo sesion: todo el mundo puede
+        leer su propio perfil.
+      operationId: miPerfil
+      responses:
+        "200":
+          description: El perfil de quien hace la peticion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Perfil"
+        "401":
+          $ref: "#/components/responses/Problem"
         "500":
           $ref: "#/components/responses/Problem"
 
@@ -339,7 +429,28 @@ components:
         maximum: 100
         default: 20
 
+    XsrfToken:
+      name: X-XSRF-TOKEN
+      in: header
+      required: true
+      description: |
+        El valor de la cookie `XSRF-TOKEN`, reenviado a mano. Es el doble envio:
+        quien no puede leer la cookie —otro origen— no puede forjar la cabecera.
+
+        Se declara aqui, y no solo en el middleware, para que el cliente
+        generado sepa que la operacion la necesita.
+      schema:
+        type: string
+      example: 8f14e45fceea167a5a36dedd4bea2543
+
   headers:
+    RetryAfter:
+      description: Segundos que faltan para poder reintentar.
+      schema:
+        type: integer
+        minimum: 1
+      example: 900
+
     ETag:
       description: |
         La version del recurso. Es lo que se manda en `If-Match` para
@@ -380,6 +491,56 @@ components:
         traceId:
           type: string
           description: Presente cuando algo fallo. Es lo que se busca en el log.
+
+    Credenciales:
+      description: |
+        `additionalProperties: false` a proposito: un campo de mas es un `400` y
+        no algo que se ignora en silencio. Es el mismo criterio que
+        `SettingNuevo`.
+      type: object
+      required: [email, password]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          maxLength: 254
+          description: |
+            No se normaliza a minusculas en el cliente ni en el servidor: quien
+            garantiza que `Ana@casa.com` y `ana@casa.com` son la misma cuenta es
+            el tipo `citext` de la columna.
+          example: superadmin@go-starter.localhost
+        password:
+          type: string
+          format: password
+          minLength: 12
+          maxLength: 1024
+          description: |
+            El maximo no es una regla de seguridad sino de recursos: argon2
+            procesa lo que le den, y un campo de diez megas ocupa un nucleo
+            entero.
+
+    Perfil:
+      description: |
+        Lo unico que el frontend sabe del usuario. `permissions[]` son los
+        efectivos, ya resueltos por sus roles.
+      type: object
+      required: [id, email, displayName, roles, permissions]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, example: superadmin@go-starter.localhost }
+        displayName: { type: string, example: Superadmin de desarrollo }
+        roles:
+          type: array
+          items: { type: string }
+          example: [superadmin]
+        permissions:
+          description: |
+            Vacio es `[]`, jamas `null`: un cliente que hace `.includes()` sobre
+            null revienta, y la diferencia entre "sin permisos" y "no vino el
+            campo" no le sirve a nadie.
+          type: array
+          items: { type: string }
+          example: [identity.user.read, settings.read, settings.write]
 
     SettingsMap:
       description: |

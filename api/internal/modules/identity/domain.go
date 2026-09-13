@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/elyares/go-starter/api/internal/platform/httpx"
 )
@@ -141,4 +142,60 @@ func validarDisplayName(n string) *httpx.Problem {
 		})
 	}
 	return nil
+}
+
+// IntentoDeSesion es lo que llega del login: las credenciales y el contexto de
+// la peticion.
+//
+// La IP y el agente no son decoracion: la IP es la mitad del limite de intentos
+// —la otra es el correo— y las dos quedan en la fila de `refresh_tokens`, que es
+// lo unico que despues permite mirar una lista de sesiones abiertas y reconocer
+// la que no es tuya.
+type IntentoDeSesion struct {
+	Email     string
+	Password  string
+	IP        string
+	UserAgent string
+}
+
+// Sesion es lo que sale de iniciar sesion: los tres valores que van a cookies,
+// mas quien resulto ser.
+//
+// El service los emite y el handler solo los coloca. Es a proposito: asi la
+// regla de que un login emite EXACTAMENTE estas tres cosas se prueba sin HTTP,
+// y un handler no puede olvidarse de una.
+type Sesion struct {
+	Usuario      Usuario
+	Roles        []string
+	AccessToken  string
+	RefreshToken string
+	TokenCSRF    string
+}
+
+// SesionNueva es la fila de `refresh_tokens`. Lleva el HASH, nunca el token.
+//
+// Que el campo se llame TokenHash y sea []byte es la defensa: un `Token string`
+// aqui haria que guardar el valor en claro fuera un descuido de una linea en
+// vez de un cambio de tipo que no compila.
+type SesionNueva struct {
+	ID        string
+	UserID    string
+	TokenHash []byte
+	ExpiraEn  time.Time
+	UserAgent string
+	IP        string
+}
+
+// PerfilDeUsuario es lo que devuelve `GET /auth/me`: quien eres y que puedes hacer.
+//
+// Los permisos van resueltos, no los roles a secas, para que el frontend pueda
+// ocultar lo que no aplica sin reimplementar el modelo de permisos. Ocultar es
+// conveniencia; la autorizacion de verdad vive en el guard de cada ruta.
+// Se llama asi y no `Perfil` porque ese nombre ya lo ocupa el tipo que genera
+// el contrato, que es la forma de CABLE. Son dos cosas distintas a proposito:
+// esta lleva el `Usuario` del dominio y aquella los campos que viajan en JSON.
+type PerfilDeUsuario struct {
+	Usuario  Usuario
+	Roles    []string
+	Permisos []string
 }

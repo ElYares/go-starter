@@ -5,8 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/elyares/go-starter/api/internal/modules/identity"
-	"github.com/elyares/go-starter/api/internal/modules/settings"
 	"github.com/elyares/go-starter/api/internal/platform/httpx"
 )
 
@@ -15,14 +13,10 @@ import (
 func rutasDeTodo(t *testing.T) []httpx.Route {
 	t.Helper()
 
-	a := &App{log: loggerDePrueba()}
-	// identity no monta rutas todavia —su superficie HTTP es de CU-001 en
-	// adelante— pero va en la lista igual: el dia que las monte, estas pruebas
-	// las miran sin que nadie tenga que acordarse de agregarlo aqui.
-	if err := a.montar([]Module{identity.New(nil, true), settings.New(nil)}); err != nil {
-		t.Fatalf("montar: %v", err)
-	}
-	return a.router.Routes()
+	// Se monta el registro de verdad y no una lista escrita a mano: asi el dia
+	// que se agregue un modulo, estas pruebas lo miran sin que nadie tenga que
+	// acordarse de agregarlo aqui.
+	return appDePrueba(t, modulosDePrueba(t)...).router.Routes()
 }
 
 // El versionado no es opcional: un starter cuyos forks salen a produccion no
@@ -54,6 +48,15 @@ func TestLoPublicoViveBajoSuPrefijoSalvoLasExcepcionesEscritas(t *testing.T) {
 	exentas := map[string]bool{
 		"GET /api/v1/healthz": true,
 		"GET /api/v1/readyz":  true,
+		// El login no puede exigir sesion: quien lo llama todavia no tiene
+		// ninguna. Lo que si lo protege es el CSRF de la cadena global, que le
+		// exige X-XSRF-TOKEN como a cualquier mutacion.
+		"POST /api/v1/auth/login": true,
+		// `me` SI exige sesion, con rbac.RequireSession, pero no un permiso con
+		// nombre: todo el mundo puede leer su propio perfil. Como el guard no
+		// anota ningun permiso en la ruta, desde aqui se ve igual que una ruta
+		// sin proteger, y por eso tiene que estar escrita.
+		"GET /api/v1/auth/me": true,
 		// La UI de exploracion del contrato. Solo existe con API_DOCS_ENABLED y
 		// no es superficie publica de la API, por eso tampoco esta en el spec.
 		"GET /api/v1/docs":         true,

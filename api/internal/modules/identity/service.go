@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/elyares/go-starter/api/internal/platform/auth"
 	"github.com/elyares/go-starter/api/internal/platform/httpx"
 	"github.com/elyares/go-starter/api/internal/platform/ids"
 	"github.com/elyares/go-starter/api/internal/platform/rbac"
@@ -25,6 +28,7 @@ type repositorio interface {
 	asignarRol(ctx context.Context, userID, rol string) error
 	quitarRol(ctx context.Context, userID, rol string) error
 	deshabilitar(ctx context.Context, userID string) (Usuario, error)
+	guardarRefresh(ctx context.Context, s SesionNueva) error
 }
 
 type Service struct {
@@ -32,6 +36,13 @@ type Service struct {
 	// dev decide si las credenciales sembradas valen. No se lee del entorno
 	// aqui: llega desde config, que es el unico sitio que traduce el entorno.
 	dev bool
+	// firmante emite el `at`. Es de plataforma: un modulo puede importar
+	// plataforma, lo que no puede es al reves. Ver la Decision 001.
+	firmante *auth.Firmante
+	// intentos es el limite del login. Vive en el service y no en el handler
+	// porque el ORDEN es la regla —mirar el limite antes de tocar argon2— y una
+	// regla que vive en un handler se reimplementa mal en el siguiente.
+	intentos *auth.Intentos
 }
 
 // UsuarioNuevo es lo que hace falta para dar de alta a alguien. La contrasena
@@ -241,4 +252,122 @@ func traducirEstado(err error) error {
 	default:
 		return err
 	}
+}
+
+// IniciarSesion es CU-001 entero, menos las cookies.
+//
+// El orden de los tres pasos es la regla, no una casualidad de como quedo
+// escrito:
+//
+//  1. El limite PRIMERO, antes de tocar la contrasena. Verificar argon2 y
+//     mirar el limite despues le regala al atacante justo el trabajo de CPU que
+//     el limite existe para negarle: seis peticiones por segundo con un correo
+//     inventado bastan para ocupar el proceso.
+//  2. Autenticar, que ya gasta el mismo tiempo exista o no el usuario.
+//  3. Emitir. Si algo falla aqui, no se emite nada a medias: el refresh se
+//     guarda ANTES de devolver la sesion, asi que no puede haber un `rt` en el
+//     navegador que no exista en la base.
+func (s *Service) IniciarSesion(ctx context.Context, in IntentoDeSesion) (Sesion, error) {
+	claves := clavesDelIntento(in)
+
+	if ok, espera := s.intentos.Permitido(claves...); !ok {
+		return Sesion{}, httpx.TooManyRequestsIn(espera)
+	}
+
+	u, err := s.Autenticar(ctx, in.Email, in.Password)
+	if err != nil {
+		// Solo cuentan los fallos de credenciales. Un error de la base no es un
+		// intento fallido: si lo fuera, una caida de Postgres dejaria a todo el
+		// mundo bloqueado quince minutos despues de que vuelva.
+		var p *httpx.Problem
+		if errors.As(err, &p) && p.Status == http.StatusUnauthorized {
+			s.intentos.Fallo(claves...)
+		}
+		return Sesion{}, err
+	}
+
+	roles, err := s.repo.rolesDe(ctx, u.ID)
+	if err != nil {
+		return Sesion{}, err
+	}
+
+	at, err := s.firmante.Firmar(u.ID, roles)
+	if err != nil {
+		return Sesion{}, err
+	}
+
+	rt, err := auth.NuevoRefreshToken()
+	if err != nil {
+		return Sesion{}, err
+	}
+
+	csrf, err := auth.NuevoTokenCSRF()
+	if err != nil {
+		return Sesion{}, err
+	}
+
+	idSesion, err := ids.NewString()
+	if err != nil {
+		return Sesion{}, err
+	}
+
+	if err := s.repo.guardarRefresh(ctx, SesionNueva{
+		ID:        idSesion,
+		UserID:    u.ID,
+		TokenHash: auth.HashDeRefresh(rt),
+		ExpiraEn:  time.Now().Add(auth.VidaDelRefreshToken),
+		UserAgent: in.UserAgent,
+		IP:        in.IP,
+	}); err != nil {
+		return Sesion{}, err
+	}
+
+	// Al final y no antes: limpiar el contador de alguien que todavia no
+	// termino de entrar le daria intentos gratis a quien provoque un fallo
+	// justo despues de acertar la contrasena.
+	s.intentos.Exito(claves...)
+
+	return Sesion{Usuario: u, Roles: roles, AccessToken: at, RefreshToken: rt, TokenCSRF: csrf}, nil
+}
+
+// clavesDelIntento arma las dos claves independientes del limite.
+//
+// El correo va normalizado igual que en la consulta, pero ademas en minusculas,
+// y SOLO aqui: la base compara con `citext` y no le hace falta, pero este mapa
+// es un mapa de Go y `Ana@casa.com` seria una clave distinta de `ana@casa.com`.
+// Sin esto, alternar mayusculas da intentos infinitos contra la misma cuenta.
+//
+// Una IP vacia no genera clave: agruparia bajo "ip:" a todos los que llegan sin
+// IP resoluble, y bastaria uno para bloquear a los demas.
+func clavesDelIntento(in IntentoDeSesion) []string {
+	claves := []string{auth.ClaveEmail(strings.ToLower(normalizarEmail(in.Email)))}
+	if in.IP != "" {
+		claves = append(claves, auth.ClaveIP(in.IP))
+	}
+	return claves
+}
+
+// Perfil arma lo que ve quien ya tiene sesion.
+//
+// Recibe el id y no el actor del contexto a proposito: el service no sabe que
+// existe HTTP. Los permisos se vuelven a resolver aqui en vez de leerse del
+// actor porque son la misma consulta y asi `me` no depende de que el middleware
+// haya corrido antes, que es lo que lo hace probable sin una peticion.
+func (s *Service) Perfil(ctx context.Context, userID string) (PerfilDeUsuario, error) {
+	u, err := s.repo.porID(ctx, userID)
+	if err != nil {
+		return PerfilDeUsuario{}, traducirEstado(err)
+	}
+
+	roles, err := s.repo.rolesDe(ctx, userID)
+	if err != nil {
+		return PerfilDeUsuario{}, err
+	}
+
+	permisos, err := s.repo.permisosDe(ctx, userID)
+	if err != nil {
+		return PerfilDeUsuario{}, err
+	}
+
+	return PerfilDeUsuario{Usuario: u, Roles: roles, Permisos: permisos}, nil
 }

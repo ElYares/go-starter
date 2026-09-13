@@ -96,9 +96,35 @@ func TestDosModulosNoPuedenDeclararElMismoPermiso(t *testing.T) {
 // El registro es explicito a proposito. Esta prueba falla si alguien agrega un
 // modulo sin pensar, y obliga a que el orden —que es el de las migraciones— sea
 // una decision visible.
+// configDePrueba trae lo minimo para armar el registro. La llave de firma no
+// puede ir vacia: `Modules` se niega a construir el modulo de identidad sin
+// ella, y eso es a proposito —un starter que firma con una llave vacia emite
+// tokens que cualquiera reproduce.
+func configDePrueba() config.Config {
+	return config.Config{Env: "dev", JWTSigningKey: "llave-de-prueba-no-usar-fuera-de-aqui"}
+}
+
+func modulosDePrueba(t *testing.T) []Module {
+	t.Helper()
+	mods, err := Modules(configDePrueba(), nil)
+	if err != nil {
+		t.Fatalf("Modules: %v", err)
+	}
+	return mods
+}
+
+// Sin llave de firma no hay registro, y el error lo dice. Es la unica forma de
+// que un despliegue mal configurado se note al arrancar y no la primera vez que
+// alguien inicia sesion.
+func TestSinLlaveDeFirmaElRegistroNoSeArma(t *testing.T) {
+	if _, err := Modules(config.Config{Env: "dev"}, nil); err == nil {
+		t.Fatal("se armo el registro con la llave de firma vacia")
+	}
+}
+
 func TestElRegistroDeclaraLosModulosEsperados(t *testing.T) {
 	nombres := []string{}
-	for _, m := range Modules(config.Config{}, nil) {
+	for _, m := range modulosDePrueba(t) {
 		nombres = append(nombres, m.Name())
 	}
 
@@ -111,25 +137,31 @@ func TestElRegistroDeclaraLosModulosEsperados(t *testing.T) {
 	}
 }
 
-// Las dos interfaces opcionales del registro no se comprueban al compilar: un
-// type assertion que no encaja devuelve false y sigue. Si a `SembrarPermisos` o
-// a `SembrarSuperadminDeDesarrollo` se les cambia un parametro y el modulo no
-// se entera, todo compila, el arranque no protesta, y lo unico que pasa es que
-// no se siembra nada. Eso se descubre entrando al dashboard y recibiendo un 403
-// en todo, sin un solo error en el log.
+// Las TRES interfaces opcionales del registro no se comprueban al compilar: un
+// type assertion que no encaja devuelve false y sigue. Si a `SembrarPermisos`,
+// a `SembrarSuperadminDeDesarrollo` o a `Actor` se les cambia un parametro y el
+// modulo no se entera, todo compila, el arranque no protesta, y lo unico que
+// pasa es que la funcion se vuelve un no-op silencioso.
 //
 // Esta prueba es lo que convierte ese silencio en un fallo. Ya paso una vez:
 // la interfaz decia `displayName` donde el modulo decia `nombre`.
-func TestElRegistroTieneQuienSiembreElCatalogoYElSuperadmin(t *testing.T) {
-	mods := Modules(config.Config{}, nil)
+//
+// `Actor` es la que mas caro sale de perder: sin ella ninguna peticion tiene
+// sesion, TODA ruta con guard responde 401, y el sintoma —"no puedo entrar a
+// nada"— no se parece en nada a la causa.
+func TestElRegistroTieneQuienSiembreElCatalogoElSuperadminYResuelvaActores(t *testing.T) {
+	mods := modulosDePrueba(t)
 
-	var catalogos, sembradores []string
+	var catalogos, sembradores, resolvedores []string
 	for _, m := range mods {
 		if _, ok := m.(CatalogoDePermisos); ok {
 			catalogos = append(catalogos, m.Name())
 		}
 		if _, ok := m.(SembradorDeSuperadmin); ok {
 			sembradores = append(sembradores, m.Name())
+		}
+		if _, ok := m.(ResolverDeActores); ok {
+			resolvedores = append(resolvedores, m.Name())
 		}
 	}
 
@@ -138,5 +170,8 @@ func TestElRegistroTieneQuienSiembreElCatalogoYElSuperadmin(t *testing.T) {
 	}
 	if len(sembradores) != 1 {
 		t.Errorf("modulos que siembran el superadmin = %v; tiene que haber exactamente uno", sembradores)
+	}
+	if len(resolvedores) != 1 {
+		t.Errorf("modulos que resuelven actores = %v; tiene que haber exactamente uno", resolvedores)
 	}
 }
