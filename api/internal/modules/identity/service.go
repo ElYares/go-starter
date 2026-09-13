@@ -268,7 +268,7 @@ func traducirEstado(err error) error {
 //     guarda ANTES de devolver la sesion, asi que no puede haber un `rt` en el
 //     navegador que no exista en la base.
 func (s *Service) IniciarSesion(ctx context.Context, in IntentoDeSesion) (Sesion, error) {
-	claves := clavesDelIntento(in)
+	correo, claves := clavesDelIntento(in)
 
 	if ok, espera := s.intentos.Permitido(claves...); !ok {
 		return Sesion{}, httpx.TooManyRequestsIn(espera)
@@ -325,7 +325,13 @@ func (s *Service) IniciarSesion(ctx context.Context, in IntentoDeSesion) (Sesion
 	// Al final y no antes: limpiar el contador de alguien que todavia no
 	// termino de entrar le daria intentos gratis a quien provoque un fallo
 	// justo despues de acertar la contrasena.
-	s.intentos.Exito(claves...)
+	//
+	// Y SOLO el del correo. Un login bueno demuestra quien es la persona de esa
+	// cuenta, no quien esta detras de la IP: si limpiara tambien la IP, quien
+	// tenga una cuenta propia probaria diecinueve correos ajenos, entraria con
+	// la suya para vaciar el contador y volveria a empezar, y el tope por IP no
+	// frenaria nada.
+	s.intentos.Exito(correo)
 
 	return Sesion{Usuario: u, Roles: roles, AccessToken: at, RefreshToken: rt, TokenCSRF: csrf}, nil
 }
@@ -339,12 +345,15 @@ func (s *Service) IniciarSesion(ctx context.Context, in IntentoDeSesion) (Sesion
 //
 // Una IP vacia no genera clave: agruparia bajo "ip:" a todos los que llegan sin
 // IP resoluble, y bastaria uno para bloquear a los demas.
-func clavesDelIntento(in IntentoDeSesion) []string {
-	claves := []string{auth.ClaveEmail(strings.ToLower(normalizarEmail(in.Email)))}
+//
+// Devuelve la del correo aparte porque es la unica que un login bueno limpia.
+func clavesDelIntento(in IntentoDeSesion) (correo string, todas []string) {
+	correo = auth.ClaveEmail(strings.ToLower(normalizarEmail(in.Email)))
+	todas = []string{correo}
 	if in.IP != "" {
-		claves = append(claves, auth.ClaveIP(in.IP))
+		todas = append(todas, auth.ClaveIP(in.IP))
 	}
-	return claves
+	return correo, todas
 }
 
 // Perfil arma lo que ve quien ya tiene sesion.

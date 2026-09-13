@@ -1,19 +1,31 @@
 package auth
 
 import (
+	"strings"
 	"sync"
 	"time"
 )
 
-// El limite del login. Cinco intentos fallidos en quince minutos, y los dos
-// contadores son independientes.
+// El limite del login, en una ventana de quince minutos: cinco fallos por
+// correo y veinte por IP.
 //
 // Por correo Y por IP, no uno de los dos: solo por IP se saltea con NAT o con
 // una botnet domestica, y solo por correo le deja a cualquiera bloquear la
 // cuenta de un tercero a voluntad escribiendo mal la contrasena seis veces.
+//
+// **Los dos topes NO pueden ser iguales.** Cada fallo cuenta en los dos
+// contadores a la vez, asi que con el mismo numero agotar un correo agota la
+// IP en el mismo instante, y detras de un NAT —una oficina, una universidad—
+// cinco contrasenas mal escritas por una persona dejaban fuera a todos los
+// demas quince minutos. Lo pedia el criterio 5 de CU-001 y no se cumplia; ver
+// TestAgotarUnCorreoNoBloqueaAOtroUsuarioDeLaMismaIP en identity.
+//
+// Veinte y no mas: la IP es la que frena al que prueba muchos correos, y con
+// un tope alto ese ataque vuelve a salir barato.
 const (
-	MaxIntentos    = 5
-	VentanaIntento = 15 * time.Minute
+	MaxIntentosPorCorreo = 5
+	MaxIntentosPorIP     = 20
+	VentanaIntento       = 15 * time.Minute
 )
 
 // Intentos cuenta los fallos recientes. Vive en memoria, y se barre solo.
@@ -49,7 +61,7 @@ func (i *Intentos) Permitido(claves ...string) (bool, time.Duration) {
 	ahora := i.ahora()
 	for _, k := range claves {
 		vivos := i.vigentes(k, ahora)
-		if len(vivos) >= MaxIntentos {
+		if len(vivos) >= topeDe(k) {
 			// Cuanto falta para que el MAS VIEJO de los que cuentan salga de la
 			// ventana, que es el instante en que vuelve a haber sitio.
 			espera := VentanaIntento - ahora.Sub(vivos[0])
@@ -146,5 +158,19 @@ func (i *Intentos) barrer(ahora time.Time) {
 //
 // Sin el prefijo, una IP literal y un correo podrian colisionar en la misma
 // clave del mapa. Es improbable y costaria un bloqueo inexplicable de rastrear.
-func ClaveEmail(email string) string { return "email:" + email }
-func ClaveIP(ip string) string       { return "ip:" + ip }
+func ClaveEmail(email string) string { return prefijoEmail + email }
+func ClaveIP(ip string) string       { return prefijoIP + ip }
+
+const (
+	prefijoEmail = "email:"
+	prefijoIP    = "ip:"
+)
+
+// topeDe sale del prefijo: es la unica forma de que un contador sepa de que
+// familia es sin cambiar la firma de Permitido.
+func topeDe(clave string) int {
+	if strings.HasPrefix(clave, prefijoIP) {
+		return MaxIntentosPorIP
+	}
+	return MaxIntentosPorCorreo
+}
