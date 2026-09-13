@@ -12,10 +12,13 @@ import {
   BaseToast,
   type ColumnaTabla,
 } from '~/shared/ui'
+import { useSesion } from '~/modules/auth/composables/useSesion'
 
-// Esta ruta es SPA por routeRules: no se renderiza en servidor.
-// El guard de sesion llega en CU-003; hoy no hay nada que proteger.
+// Esta ruta es SPA por routeRules: no se renderiza en servidor. La protege
+// middleware/sesion.global.ts, que no deja llegar aqui sin perfil.
 useHead({ title: 'Dashboard · go-starter' })
+
+const { perfil } = useSesion()
 
 // Un muestrario, no una pantalla de producto: es lo que hace que los primitivos
 // se vean funcionando juntos antes de que exista el CRUD de la fase 3, y lo que
@@ -62,6 +65,7 @@ function crear() {
       <div>
         <BaseBadge variant="accent">fase 1</BaseBadge>
         <h1>Dashboard</h1>
+        <p v-if="perfil" class="quien">Sesion de {{ perfil.displayName }}</p>
       </div>
       <BaseButton @click="dialogoAbierto = true">Nueva pagina</BaseButton>
     </header>
@@ -152,6 +156,11 @@ function crear() {
 h1 {
   margin: var(--space-2) 0 0;
   font-size: var(--text-display);
+}
+.quien {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
 }
 .hint {
   color: var(--color-text-muted);
