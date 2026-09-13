@@ -145,15 +145,33 @@ navegador  → baseURL '/api/v1'                 (mismo origen, cookies solas)
 servidor   → baseURL 'http://api:8080/api/v1'  (red interna del compose)
 ```
 
-Interceptores, **en este orden**:
+Son dos piezas, y no se mezclan:
+
+- **`shared/api/useApiFetch.ts`** — lo que se renderiza en servidor (la
+  landing). Solo lecturas
+- **`shared/api/client.ts`** — el cliente del navegador, sobre `fetch` y sin
+  dependencias. Lo entrega `useApi()`, que **lanza en SSR** a propósito: lee
+  `document.cookie`, y fallar en el sitio de la causa es mejor que un
+  `document is not defined` tres llamadas más abajo
+
+Etapas del cliente, **en este orden**:
 
 1. **Refresh:** ante un `401`, intenta `POST /auth/refresh` **una vez** y
    reintenta la petición original. Con exclusión explícita de la ruta de refresh
-   (ver `06-flujos.md`) y una sola promesa compartida para peticiones en vuelo
-2. **Normalización:** todo fallo sale como `ApiError`, nunca como error crudo
+   (ver `06-flujos.md`) y una sola promesa compartida para peticiones en vuelo.
+   **Todavía no existe:** llega con CU-002, cuando exista el endpoint
+2. **Normalización:** todo fallo sale como `ApiError` (`shared/api/errors.ts`),
+   nunca como error crudo. Un `502` de Caddy trae HTML y sale igual como
+   `ApiError`, no como un `SyntaxError` de JSON
 
 Invertir el orden deja al refresh sin la configuración original que necesita
 para reintentar.
+
+**El CSRF lo pone el cliente, y lo lee de la cookie en cada petición.** El
+login rota el token: una copia en memoria manda el viejo y responde `403` justo
+después de entrar. Y si la cookie no existe, el cliente la siembra con un
+`GET /healthz` antes de la mutación — pasa siempre en `/login`, que lo sirve
+Nuxt y no Go, así que abrirlo no emite la cookie.
 
 `ApiError` distingue dos cosas que se confunden siempre:
 
@@ -180,11 +198,29 @@ de un fork recién instalado.
 
 ## Guards
 
-- `/admin/**` exige sesión: sin ella, redirige al login con `?next=`
+- `/admin/**` exige sesión: sin ella, redirige a `/login` con `?next=`. Vive en
+  `middleware/sesion.global.ts`, y la decisión en `modules/auth/sesion.ts`
+  (`decidirAcceso`), que se prueba sin Nuxt
 - Las acciones se ocultan por permiso leído de `me`, **como conveniencia**. La
   autorización real vive en el servidor y hay pruebas que lo confirman
-- El guard cierra por omisión: una ruta nueva bajo `/admin` está protegida sin
-  que nadie se acuerde de protegerla
+- El guard cierra por omisión: es **global**, así que una ruta nueva bajo
+  `/admin` está protegida sin que nadie se acuerde de protegerla
+- Sin la cookie `has_session` no se pide `me`: sería un `401` que ya se sabía.
+  Con ella, un `401` de `me` lleva al login y **cualquier otro fallo lleva a
+  `error.vue`**, no al login: una caída no es falta de sesión
+- **`?next=` solo acepta rutas de `/admin` de este origen.** Lo escribe
+  cualquiera, y sin ese filtro el login es una redirección abierta: un enlace con
+  el dominio de verdad que, después de pedir la contraseña, deja a la persona en
+  otro sitio
+- `/login` es SPA como `/admin`. Renderizado en servidor, el formulario se puede
+  enviar antes de hidratar, y ese envío es el nativo del navegador: un `GET`
+  que no pasa por el cliente ni por el CSRF
+
+**El "Reintentar" de `error.vue` recarga, no navega.** `clearError({ redirect })`
+hacia la ruta en la que ya está la URL es una navegación duplicada: Vue Router
+la descarta sin correr ningún middleware y el error se limpia igual. El
+resultado era el dashboard pintado **sin pasar por el guard**. Salió probando
+la caída de verdad en un navegador; ninguna prueba unitaria lo habría visto.
 
 ## Verificación
 

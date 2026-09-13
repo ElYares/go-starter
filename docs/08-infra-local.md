@@ -143,18 +143,36 @@ Un solo `.env` en la raíz, **sin valores por omisión para secretos**. Una clav
 de firma con default es una clave de firma en producción.
 
 ```
-POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB
-DATABASE_URL
+HOST_UID / HOST_GID      # para que lo generado dentro no quede de root
+DB_NAME / DB_USER / DB_PASSWORD   # el compose arma DATABASE_URL con ellas
 JWT_SIGNING_KEY          # sin default. Si falta, el proceso no arranca
 COOKIE_SECURE            # false solo en local sin TLS
-STORAGE_PATH
+API_DOCS_ENABLED         # la UI de /api/v1/docs; se apaga sola fuera de dev
+MIGRATE_ON_START         # el compose la pone en true para desarrollo
 NUXT_PUBLIC_API_BASE     # /api/v1        (lo usa el navegador)
 NUXT_API_INTERNAL        # http://api:8080/api/v1  (lo usa el SSR)
 ```
 
+`.env.example` es la referencia con valores de local. `STORAGE_PATH` llega con
+los medios, en la fase 3; hoy nadie la lee.
+
 Que el proceso **muera al arrancar** si falta un secreto, en vez de degradarse a
 un default, es deliberado: un servicio a medio configurar que responde `200` es
 peor que uno que no levanta.
+
+### Las dos de la sesión
+
+- **`JWT_SIGNING_KEY`** firma el `at` con HS256. Se genera con
+  `openssl rand -base64 48`. Vacía no arranca, y se comprueba **dos veces**:
+  `config.Load` la exige, y `app.Modules` se niega a armar el registro sin ella
+  —así tampoco corren `cmd/migrate` ni `cmd/seed` con una llave vacía—.
+  Cambiarla invalida todos los `at` emitidos: quien tenga sesión vuelve al
+  login en la siguiente petición, no en quince minutos
+- **`COOKIE_SECURE`** pone la bandera `Secure` en las cuatro cookies. Sin la
+  variable, o con un valor que no se entiende (`si`, `yes`), queda en **true**:
+  la falla segura es la que no manda la sesión por http. Sale de config y **no**
+  de mirar `r.TLS`, porque detrás del edge todo llega por http y el flag se
+  apagaría justo en producción
 
 ## Probar la API
 
@@ -167,6 +185,19 @@ Dos superficies, y la primera existe por una razón concreta:
   Solo existe con `APP_ENV=dev` y `API_DOCS_ENABLED=true`; fuera de dev,
   `config.Load` la apaga aunque la variable quede puesta
 - **`api/requests.http`** — las mismas peticiones para lanzarlas desde el editor
+
+Con `curl`, una sesión necesita el CSRF: el primer `GET` siembra la cookie y
+cada mutación la copia en `X-XSRF-TOKEN`. Sin eso, el login responde `403`.
+
+```sh
+B=http://go-starter.localhost/api/v1; J=$(mktemp)
+curl -s -c $J $B/healthz >/dev/null                        # siembra XSRF-TOKEN
+X=$(awk '$6=="XSRF-TOKEN"{print $7}' $J)
+curl -s -b $J -c $J -X POST $B/auth/login -H "X-XSRF-TOKEN: $X" \
+     -H 'Content-Type: application/json' \
+     -d '{"email":"superadmin@go-starter.localhost","password":"superadmin-de-desarrollo"}'
+curl -s -b $J $B/auth/me                                   # 200 con roles y permisos
+```
 
 ## Recarga en caliente
 

@@ -158,6 +158,14 @@ respuesta correcta es un evento en `platform`, no una interfaz más.
 - [ ] Sus permisos están declarados, no escritos a mano en una migración. Si el
       módulo además **guarda** el catálogo, implementa `app.CatalogoDePermisos`;
       solo uno puede hacerlo, y el arranque se niega a sembrar si hay dos
+- [ ] Si implementa una de las **interfaces opcionales** del registro
+      —`app.CatalogoDePermisos`, `app.SembradorDeSuperadmin` o
+      `app.ResolverDeActores`—, está cubierta en
+      `api/internal/app/modules_test.go`. No es redundante: una firma que deja de
+      encajar **no rompe la compilación**, el `m.(Interfaz)` devuelve `false` y
+      la función se vuelve un no-op. Sin `ResolverDeActores`, ninguna petición
+      tiene sesión y toda ruta con guard responde `401` sin un error en el log.
+      Solo un módulo puede resolver actores: con dos, `app` no levanta
 - [ ] Sus migraciones son locales y con su propia tabla de versiones
 - [ ] Sus endpoints cumplen el molde de [`04-reglas-de-crud.md`](04-reglas-de-crud.md)
 - [ ] Está en `openapi.yaml` y los tipos del frontend están regenerados

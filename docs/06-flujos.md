@@ -176,7 +176,7 @@ petición
   → logger           (método, ruta, estado, duración, traceId)
   → CORS/CSRF        (mutaciones exigen X-XSRF-TOKEN)
   → sesión           (cookie at → Actor en el contexto; sin cookie, anónimo)
-  → rate limit       (por IP; más estricto en /auth)
+  → rate limit       (por IP; más estricto en /auth)   ← PENDIENTE, ver abajo
   → router           (resuelve el módulo y su handler)
   → guard            (permiso declarado en la ruta; sin política declarada, cierra)
   → handler → service → repo
@@ -185,3 +185,13 @@ petición
 El orden importa: `traceId` va primero porque todo lo demás lo registra, y
 `recover` va antes que el logger para que un pánico también quede registrado.
 El guard va **después** del router porque la política se declara en la ruta.
+
+**El rate limit global todavía no existe.** Hoy solo está el límite del login
+(por correo y por IP, en `platform/auth/intentos.go`), que cuenta fallos y no
+peticiones. El global es de HU-010, y trae una trampa que hay que resolver
+antes de escribirlo: **el SSR de Nuxt le pega a `api:8080` directo, sin pasar
+por el edge**, así que sin reenviar la IP del visitante todas las visitas a la
+landing salen con la IP del contenedor `web` y comparten un solo balde. El
+primer pico de tráfico tumbaría la landing entera con `429`. Y como producción
+está sin decidir, puede que el sitio correcto para ese límite sea el edge y no
+Go.
