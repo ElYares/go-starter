@@ -99,8 +99,8 @@ cookie. Doble envío: quien no puede leer la cookie no puede forjar la cabecera.
 
 ```
 POST   /api/v1/auth/login     {email, password}  → 204 + cookies
-POST   /api/v1/auth/refresh   (solo cookie rt)   → 204 + cookies rotadas
-POST   /api/v1/auth/logout                        → 204, revoca y borra cookies
+POST   /api/v1/auth/refresh   (solo cookie rt)   → 204 + cookies rotadas | 401 y las borra
+POST   /api/v1/auth/logout                        → 204 siempre, revoca ese rt y borra cookies
 GET    /api/v1/auth/me                            → 200 {id, email, displayName, roles[], permissions[]}
 ```
 

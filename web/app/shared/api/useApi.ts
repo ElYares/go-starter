@@ -1,4 +1,4 @@
-import { crearCliente, type ClienteApi } from './client'
+import { candadoDelNavegador, crearCliente, type ClienteApi } from './client'
 
 let cliente: ClienteApi | undefined
 
@@ -20,6 +20,7 @@ export function useApi(): ClienteApi {
     base: useRuntimeConfig().public.apiBase as string,
     fetch: globalThis.fetch.bind(globalThis),
     cookies: () => document.cookie,
+    candado: candadoDelNavegador(),
   })
   return cliente
 }

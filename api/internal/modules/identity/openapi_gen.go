@@ -74,6 +74,26 @@ type IniciarSesionParams struct {
 	XXSRFTOKEN XsrfToken `json:"X-XSRF-TOKEN"`
 }
 
+// CerrarSesionParams defines parameters for CerrarSesion.
+type CerrarSesionParams struct {
+	// XXSRFTOKEN El valor de la cookie `XSRF-TOKEN`, reenviado a mano. Es el doble envio:
+	// quien no puede leer la cookie —otro origen— no puede forjar la cabecera.
+	//
+	// Se declara aqui, y no solo en el middleware, para que el cliente
+	// generado sepa que la operacion la necesita.
+	XXSRFTOKEN XsrfToken `json:"X-XSRF-TOKEN"`
+}
+
+// RenovarSesionParams defines parameters for RenovarSesion.
+type RenovarSesionParams struct {
+	// XXSRFTOKEN El valor de la cookie `XSRF-TOKEN`, reenviado a mano. Es el doble envio:
+	// quien no puede leer la cookie —otro origen— no puede forjar la cabecera.
+	//
+	// Se declara aqui, y no solo en el middleware, para que el cliente
+	// generado sepa que la operacion la necesita.
+	XXSRFTOKEN XsrfToken `json:"X-XSRF-TOKEN"`
+}
+
 // IniciarSesionJSONRequestBody defines body for IniciarSesion for application/json ContentType.
 type IniciarSesionJSONRequestBody = Credenciales
 
@@ -82,9 +102,15 @@ type ServerInterface interface {
 	// IniciarSesion Iniciar sesion
 	// (POST /auth/login)
 	IniciarSesion(w http.ResponseWriter, r *http.Request, params IniciarSesionParams)
+	// CerrarSesion Cerrar la sesion
+	// (POST /auth/logout)
+	CerrarSesion(w http.ResponseWriter, r *http.Request, params CerrarSesionParams)
 	// MiPerfil Quien tiene esta sesion
 	// (GET /auth/me)
 	MiPerfil(w http.ResponseWriter, r *http.Request)
+	// RenovarSesion Renovar la sesion
+	// (POST /auth/refresh)
+	RenovarSesion(w http.ResponseWriter, r *http.Request, params RenovarSesionParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -141,11 +167,101 @@ func (siw *ServerInterfaceWrapper) IniciarSesion(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// CerrarSesion operation middleware
+func (siw *ServerInterfaceWrapper) CerrarSesion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CerrarSesionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-XSRF-TOKEN" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-XSRF-TOKEN")]; found {
+		var XXSRFTOKEN XsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-XSRF-TOKEN", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-XSRF-TOKEN", valueList[0], &XXSRFTOKEN, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-XSRF-TOKEN", Err: err})
+			return
+		}
+
+		params.XXSRFTOKEN = XXSRFTOKEN
+
+	} else {
+		err := fmt.Errorf("Header parameter X-XSRF-TOKEN is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-XSRF-TOKEN", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CerrarSesion(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // MiPerfil operation middleware
 func (siw *ServerInterfaceWrapper) MiPerfil(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.MiPerfil(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RenovarSesion operation middleware
+func (siw *ServerInterfaceWrapper) RenovarSesion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RenovarSesionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-XSRF-TOKEN" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-XSRF-TOKEN")]; found {
+		var XXSRFTOKEN XsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-XSRF-TOKEN", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-XSRF-TOKEN", valueList[0], &XXSRFTOKEN, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-XSRF-TOKEN", Err: err})
+			return
+		}
+
+		params.XXSRFTOKEN = XXSRFTOKEN
+
+	} else {
+		err := fmt.Errorf("Header parameter X-XSRF-TOKEN is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-XSRF-TOKEN", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RenovarSesion(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -277,6 +393,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/login", wrapper.IniciarSesion)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/auth/me", wrapper.MiPerfil)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/refresh", wrapper.RenovarSesion)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/logout", wrapper.CerrarSesion)
 
 	return m
 }

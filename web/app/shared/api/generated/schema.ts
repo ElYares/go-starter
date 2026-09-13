@@ -99,6 +99,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Renovar la sesion
+         * @description Cambia el `rt` de la cookie por un par nuevo —`at` y `rt`— y rota
+         *     `XSRF-TOKEN`. Responde `204` sin cuerpo y reemite las cuatro cookies.
+         *
+         *     El `rt` viaja en su cookie (`Path=/api/v1/auth`, HttpOnly) y **no se
+         *     declara como parametro**: si lo fuera, una peticion sin la cookie
+         *     responderia `400` de parametro faltante en vez del `401` que la trata
+         *     como lo que es, una sesion que no existe.
+         *
+         *     Es `security: []` porque justo se llama cuando el `at` ya caduco. Exige
+         *     `X-XSRF-TOKEN`, como toda mutacion.
+         *
+         *     **Rotacion con deteccion de robo** (CU-002): cada `rt` sirve una sola
+         *     vez. Presentar uno que ya se roto significa que otra copia sigue
+         *     circulando, y revoca **todas** las sesiones de esa persona. La carrera
+         *     entre pestanas de un mismo navegador no llega aqui: la ordena el cliente
+         *     con un candado entre pestanas.
+         */
+        post: operations["renovarSesion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cerrar la sesion
+         * @description Revoca el `rt` de la cookie y borra las cuatro cookies. Un `rt` revocado
+         *     no renueva: el `at` que quede vivo caduca solo, como mucho en quince
+         *     minutos, porque un token firmado no se puede revocar.
+         *
+         *     **Siempre responde `204`**, haya cookie o no y exista o no el token:
+         *     cerrar una sesion que ya no esta es cerrarla, y un error aqui dejaria al
+         *     cliente sin saber si sigue dentro.
+         *
+         *     Es `security: []` por la misma razon que el refresh: tiene que funcionar
+         *     con el `at` caducado. Exige `X-XSRF-TOKEN`: sin eso, cualquier sitio
+         *     podria cerrarle la sesion a quien lo visite.
+         */
+        post: operations["cerrarSesion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/public/settings": {
         parameters: {
             query?: never;
@@ -579,6 +644,85 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    renovarSesion: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description El valor de la cookie `XSRF-TOKEN`, reenviado a mano. Es el doble envio:
+                 *     quien no puede leer la cookie —otro origen— no puede forjar la cabecera.
+                 *
+                 *     Se declara aqui, y no solo en el middleware, para que el cliente
+                 *     generado sepa que la operacion la necesita.
+                 * @example 8f14e45fceea167a5a36dedd4bea2543
+                 */
+                "X-XSRF-TOKEN": components["parameters"]["XsrfToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /**
+             * @description Sesion renovada. Las cuatro cookies van en `Set-Cookie`, igual que
+             *     en el login.
+             */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description No hay sesion que renovar: sin cookie `rt`, desconocido, caducado,
+             *     revocado o ya usado. **Borra las cuatro cookies** —incluida
+             *     `has_session`— para que el cliente no vuelva a intentarlo.
+             *
+             *     Los cinco casos responden identico. Distinguir "ya usado" le diria a
+             *     quien robo el token que lo detectaron.
+             */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    cerrarSesion: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description El valor de la cookie `XSRF-TOKEN`, reenviado a mano. Es el doble envio:
+                 *     quien no puede leer la cookie —otro origen— no puede forjar la cabecera.
+                 *
+                 *     Se declara aqui, y no solo en el middleware, para que el cliente
+                 *     generado sepa que la operacion la necesita.
+                 * @example 8f14e45fceea167a5a36dedd4bea2543
+                 */
+                "X-XSRF-TOKEN": components["parameters"]["XsrfToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sesion cerrada y cookies borradas */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
         };
     };

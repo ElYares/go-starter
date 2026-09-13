@@ -4,6 +4,28 @@ import { ApiError, errorDesdeRespuesta, errorSinRespuesta } from './errors'
 export const COOKIE_CSRF = 'XSRF-TOKEN'
 export const CABECERA_CSRF = 'X-XSRF-TOKEN'
 
+/**
+ * La pista de sesion (Decision 007). No es una credencial: dice "hubo sesion"
+ * para que una carga sin ella no pida nada que ya se sabe que responde 401.
+ */
+export const COOKIE_PISTA = 'has_session'
+
+export const RUTA_REFRESH = '/auth/refresh'
+
+// Las rutas cuyo 401 NO dispara un refresh.
+//
+// - el refresh, porque su 401 volveria a entrar aqui, encontraria su propia
+//   promesa en vuelo y se pondria a esperarla: una peticion que no vuelve nunca,
+//   que en pruebas se ve como timeout y no como fallo
+// - el login, porque su 401 son credenciales malas, no una sesion caducada
+// - el logout, porque renovar para cerrar no tiene sentido
+const SIN_RENOVACION = new Set([RUTA_REFRESH, '/auth/login', '/auth/logout'])
+
+/** El nombre del candado entre pestanas. Uno por origen es suficiente. */
+export const CANDADO_REFRESH = 'go-starter:refresh'
+
+export type Candado = (nombre: string, trabajo: () => Promise<void>) => Promise<void>
+
 // La ruta con la que se siembra la cookie CSRF cuando falta. Cualquier GET que
 // atraviese la cadena global la emite; healthz es el mas barato y no depende de
 // la base ni de la sesion.
@@ -16,6 +38,12 @@ export interface OpcionesCliente {
   fetch: typeof fetch
   /** Inyectado por la misma razon. En la app es `() => document.cookie`. */
   cookies: () => string
+  /**
+   * Serializa el refresh entre pestanas. En la app es `navigator.locks`; sin
+   * soporte, corre el trabajo directo y queda solo la promesa compartida de la
+   * pestana.
+   */
+  candado?: Candado
 }
 
 export interface ClienteApi {
@@ -41,21 +69,14 @@ export function leerCookie(nombre: string, cookies: string): string | undefined 
 }
 
 /**
- * El cliente del navegador.
+ * El cliente del navegador, con las dos etapas de docs/07-frontend.md: el
+ * refresh ante un 401 y la normalizacion de todo fallo a ApiError.
  *
- * Hoy tiene UNA etapa de las dos que fija docs/07-frontend.md: la
- * normalizacion a ApiError. **El reintento con refresh no esta, y no es un
- * olvido:** `POST /auth/refresh` no existe todavia —es CU-002—, y un
- * interceptor contra un endpoint que responde 404 convertiria cada 401 en dos
- * peticiones sin ganar nada. Cuando llegue, va ANTES de la normalizacion, con la
- * exclusion de la propia ruta de refresh: sin ella, el 401 del refresh espera su
- * propia promesa y la peticion no vuelve nunca.
- *
- * El token CSRF se lee de la cookie EN CADA PETICION y no se guarda. El login
- * lo rota, y el refresh lo rotara: una copia en memoria manda el viejo y
- * responde 403 justo despues de entrar.
+ * El token CSRF se lee de la cookie EN CADA PETICION y no se guarda. El login y
+ * el refresh lo rotan: una copia en memoria manda el viejo y responde 403 justo
+ * despues de renovar.
  */
-export function crearCliente({ base, fetch: pedir, cookies }: OpcionesCliente): ClienteApi {
+export function crearCliente({ base, fetch: pedir, cookies, candado = sinCandado }: OpcionesCliente): ClienteApi {
   async function tokenCSRF(signal?: AbortSignal): Promise<string | undefined> {
     const actual = leerCookie(COOKIE_CSRF, cookies())
     if (actual) return actual
@@ -64,11 +85,65 @@ export function crearCliente({ base, fetch: pedir, cookies }: OpcionesCliente): 
     // nada que copiar y el servidor responderia 403 sin que la persona pueda
     // hacer nada. Pasa siempre en `/login`: la pagina la sirve Nuxt, no Go, asi
     // que abrirla no siembra la cookie.
-    await enviar('GET', RUTA_SEMILLA, undefined, signal)
+    await enviarUnaVez('GET', RUTA_SEMILLA, undefined, signal)
     return leerCookie(COOKIE_CSRF, cookies())
   }
 
+  // La promesa del refresh en vuelo en ESTA pestana. Cinco peticiones que
+  // reciben 401 a la vez esperan la misma: sin esto saldrian cinco refresh, el
+  // primero rotaria el token y los otros cuatro presentarian uno ya usado, que
+  // el servidor trata como robo.
+  let renovando: Promise<void> | null = null
+
+  function renovar(csrfAlSalir: string | undefined): Promise<void> {
+    renovando ??= candado(CANDADO_REFRESH, async () => {
+      // Con el candado en la mano, puede que otra pestana haya renovado
+      // mientras esta esperaba. El refresh rota XSRF-TOKEN, asi que si la
+      // cookie ya no es la que habia al mandar la peticion, el `rt` de la cookie
+      // es otro y basta con reintentar. Renovar otra vez presentaria el `rt`
+      // que la otra pestana acaba de gastar: robo, y fuera todas las sesiones.
+      //
+      // Solo si HABIA token al salir. Tras reiniciar el navegador la cookie
+      // CSRF —que es de sesion— ya no esta, pero `has_session` si; el primer
+      // GET siembra una nueva, y compararla con "nada" pareceria una
+      // renovacion ajena: se saltaria el refresh y un `rt` valido acabaria en
+      // el login.
+      const actual = leerCookie(COOKIE_CSRF, cookies())
+      if (csrfAlSalir !== undefined && actual !== csrfAlSalir) return
+
+      await enviarUnaVez<void>('POST', RUTA_REFRESH, undefined)
+    }).finally(() => {
+      renovando = null
+    })
+    return renovando
+  }
+
   async function enviar<T>(metodo: string, ruta: string, cuerpo: unknown, signal?: AbortSignal): Promise<T> {
+    const csrfAlSalir = leerCookie(COOKIE_CSRF, cookies())
+    try {
+      return await enviarUnaVez<T>(metodo, ruta, cuerpo, signal)
+    } catch (fallo) {
+      const renovable =
+        fallo instanceof ApiError &&
+        fallo.status === 401 &&
+        !SIN_RENOVACION.has(ruta) &&
+        // Sin pista no hubo sesion: el 401 es la respuesta correcta y un
+        // refresh solo seria otro 401.
+        leerCookie(COOKIE_PISTA, cookies()) !== undefined
+      if (!renovable) throw fallo
+
+      // Si el refresh falla, sale SU error: un 401 dice "no hay sesion" y una
+      // caida dice "no se", que es lo que el guard necesita distinguir.
+      await renovar(csrfAlSalir)
+
+      // Una sola vez. Un segundo 401 con la sesion recien renovada no se
+      // arregla renovando otra vez, y reintentar en bucle es un cliente que
+      // martillea al servidor.
+      return enviarUnaVez<T>(metodo, ruta, cuerpo, signal)
+    }
+  }
+
+  async function enviarUnaVez<T>(metodo: string, ruta: string, cuerpo: unknown, signal?: AbortSignal): Promise<T> {
     const cabeceras: Record<string, string> = { Accept: 'application/json, application/problem+json' }
 
     if (metodo !== 'GET') {
@@ -116,5 +191,21 @@ export function crearCliente({ base, fetch: pedir, cookies }: OpcionesCliente): 
   return {
     get: (ruta, init) => enviar('GET', ruta, undefined, init?.signal),
     post: (ruta, cuerpo, init) => enviar('POST', ruta, cuerpo, init?.signal),
+  }
+}
+
+const sinCandado: Candado = (_nombre, trabajo) => trabajo()
+
+/**
+ * El candado de la app: Web Locks, que coordina TODAS las pestanas del mismo
+ * origen. El mismo `rt` solo existe dos veces en un cookie jar, asi que es aqui
+ * —y no en el servidor— donde se ordena la carrera de CU-002 A1. El servidor
+ * trata todo reuso como robo.
+ */
+export function candadoDelNavegador(): Candado {
+  const locks = globalThis.navigator?.locks
+  if (!locks) return sinCandado
+  return async (nombre, trabajo) => {
+    await locks.request(nombre, trabajo)
   }
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -29,6 +30,10 @@ type repositorio interface {
 	quitarRol(ctx context.Context, userID, rol string) error
 	deshabilitar(ctx context.Context, userID string) (Usuario, error)
 	guardarRefresh(ctx context.Context, s SesionNueva) error
+	refreshPorHash(ctx context.Context, hash []byte) (RefreshGuardado, error)
+	rotarRefresh(ctx context.Context, anteriorID string, nueva SesionNueva) (bool, error)
+	revocarSesionesDe(ctx context.Context, userID string) error
+	revocarRefresh(ctx context.Context, hash []byte) error
 }
 
 type Service struct {
@@ -379,4 +384,130 @@ func (s *Service) Perfil(ctx context.Context, userID string) (PerfilDeUsuario, e
 	}
 
 	return PerfilDeUsuario{Usuario: u, Roles: roles, Permisos: permisos}, nil
+}
+
+// Renovar es CU-002: cambia un `rt` por un par nuevo, una sola vez.
+//
+// **Todo reuso es robo, sin ventana de gracia.** Un `rt` ya rotado solo puede
+// llegar si hay otra copia: la carrera legitima —dos pestanas del mismo
+// navegador refrescando a la vez— la ordena el cliente con un candado entre
+// pestanas, porque es el unico sitio donde el mismo token existe dos veces. Una
+// ventana de gracia aqui dejaria sin detectar el robo cuyo reuso caiga dentro.
+//
+// Los rechazos responden el MISMO 401. Decirle a quien presenta un token robado
+// que se detecto el robo le ahorra la duda.
+func (s *Service) Renovar(ctx context.Context, in RenovacionDeSesion) (Sesion, error) {
+	if in.RefreshToken == "" {
+		return Sesion{}, httpx.Unauthorized()
+	}
+
+	guardado, err := s.repo.refreshPorHash(ctx, auth.HashDeRefresh(in.RefreshToken))
+	if errors.Is(err, errNoExiste) {
+		return Sesion{}, httpx.Unauthorized()
+	}
+	if err != nil {
+		return Sesion{}, err
+	}
+
+	if err := s.rechazoDeRefresh(ctx, guardado); err != nil {
+		return Sesion{}, err
+	}
+
+	u, err := s.repo.porID(ctx, guardado.UserID)
+	if errors.Is(err, errNoExiste) {
+		return Sesion{}, httpx.Unauthorized()
+	}
+	if err != nil {
+		return Sesion{}, err
+	}
+	// La cuenta se vuelve a mirar en cada renovacion: deshabilitarla tiene que
+	// cortar la sesion en el siguiente refresh, no dentro de catorce dias.
+	if !u.Enabled || (u.DevSeed && !s.dev) {
+		return Sesion{}, httpx.Unauthorized()
+	}
+
+	roles, err := s.repo.rolesDe(ctx, u.ID)
+	if err != nil {
+		return Sesion{}, err
+	}
+	at, err := s.firmante.Firmar(u.ID, roles)
+	if err != nil {
+		return Sesion{}, err
+	}
+	rt, err := auth.NuevoRefreshToken()
+	if err != nil {
+		return Sesion{}, err
+	}
+	csrf, err := auth.NuevoTokenCSRF()
+	if err != nil {
+		return Sesion{}, err
+	}
+	idSesion, err := ids.NewString()
+	if err != nil {
+		return Sesion{}, err
+	}
+
+	rotado, err := s.repo.rotarRefresh(ctx, guardado.ID, SesionNueva{
+		ID:        idSesion,
+		UserID:    u.ID,
+		TokenHash: auth.HashDeRefresh(rt),
+		ExpiraEn:  time.Now().Add(auth.VidaDelRefreshToken),
+		UserAgent: in.UserAgent,
+		IP:        in.IP,
+	})
+	if err != nil {
+		return Sesion{}, err
+	}
+	if !rotado {
+		// Entre leer la fila y rotarla, otra peticion la cambio. Se vuelve a
+		// leer para saber que paso: si la roto, es un reuso simultaneo y cuenta
+		// como robo; si la revoco un logout, es solo una sesion cerrada.
+		actual, err := s.repo.refreshPorHash(ctx, auth.HashDeRefresh(in.RefreshToken))
+		if err != nil && !errors.Is(err, errNoExiste) {
+			return Sesion{}, err
+		}
+		if err := s.rechazoDeRefresh(ctx, actual); err != nil {
+			return Sesion{}, err
+		}
+		return Sesion{}, httpx.Unauthorized()
+	}
+
+	return Sesion{Usuario: u, Roles: roles, AccessToken: at, RefreshToken: rt, TokenCSRF: csrf}, nil
+}
+
+// rechazoDeRefresh dice si una fila no sirve para renovar, y actua si es robo.
+//
+// **El orden importa: "revocado" va ANTES que "ya rotado".** La revocacion
+// general marca tambien los tokens viejos de la cadena, asi que un robo se
+// detecta una vez y el token queda revocado. Al reves, quien tenga un `rt`
+// viejo robado podria repetirlo cuando quisiera y cada vez tumbaria todas las
+// sesiones de la victima, incluidas las que abra al volver a entrar: una forma
+// comoda de echar a alguien para siempre sin saber su contrasena.
+func (s *Service) rechazoDeRefresh(ctx context.Context, g RefreshGuardado) error {
+	switch {
+	case g.RevocadoEn != nil:
+		return httpx.Unauthorized()
+	case g.ReemplazadoPor != nil:
+		if err := s.repo.revocarSesionesDe(ctx, g.UserID); err != nil {
+			return err
+		}
+		slog.WarnContext(ctx, "refresh reusado: se revocan todas las sesiones",
+			slog.String("user_id", g.UserID), slog.String("sesion", g.ID))
+		return httpx.Unauthorized()
+	case !time.Now().Before(g.ExpiraEn):
+		return httpx.Unauthorized()
+	}
+	return nil
+}
+
+// CerrarSesion revoca la sesion del token que se presenta. Sin token no hay
+// nada que revocar, y eso tambien es haber cerrado.
+//
+// Revoca UNA sesion y no todas: cerrar en el portatil no tiene por que sacar a
+// la persona del telefono.
+func (s *Service) CerrarSesion(ctx context.Context, refreshToken string) error {
+	if refreshToken == "" {
+		return nil
+	}
+	return s.repo.revocarRefresh(ctx, auth.HashDeRefresh(refreshToken))
 }
