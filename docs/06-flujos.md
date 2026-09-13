@@ -30,6 +30,13 @@ sequenceDiagram
   no consuma tiempo de argon2
 - El contador va por email **y** por IP, independientes. Solo por IP se saltea
   con NAT; solo por email deja bloquear a un tercero a voluntad
+- **Cinco fallos por correo y veinte por IP**, en quince minutos. Los topes no
+  pueden ser iguales: cada fallo cuenta en los dos contadores, y con el mismo
+  número agotar un correo agotaba su IP en el mismo instante — detrás de un NAT,
+  una persona que se equivoca dejaba fuera a toda la oficina
+- Un login correcto limpia **solo el contador de su correo**. Si limpiara también
+  el de la IP, bastaría una cuenta propia para vaciarlo entre tanda y tanda de
+  correos ajenos
 - Cuenta deshabilitada responde el mismo `401` genérico y no emite cookies
 
 ---

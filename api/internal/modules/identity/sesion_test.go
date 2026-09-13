@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"reflect"
 	"testing"
@@ -172,7 +173,7 @@ func TestAlSextoIntentoFallidoResponde429(t *testing.T) {
 
 	malo := IntentoDeSesion{Email: "ana@casa.com", Password: "no-es-la-contrasena", IP: "203.0.113.9"}
 
-	for n := 1; n <= auth.MaxIntentos; n++ {
+	for n := 1; n <= auth.MaxIntentosPorCorreo; n++ {
 		_, err := svc.IniciarSesion(context.Background(), malo)
 		var p *httpx.Problem
 		if !errors.As(err, &p) || p.Status != http.StatusUnauthorized {
@@ -183,7 +184,7 @@ func TestAlSextoIntentoFallidoResponde429(t *testing.T) {
 	_, err := svc.IniciarSesion(context.Background(), malo)
 	var p *httpx.Problem
 	if !errors.As(err, &p) || p.Status != http.StatusTooManyRequests {
-		t.Fatalf("el intento %d dio %v, se esperaba 429", auth.MaxIntentos+1, err)
+		t.Fatalf("el intento %d dio %v, se esperaba 429", auth.MaxIntentosPorCorreo+1, err)
 	}
 	if p.RetryAfter <= 0 {
 		t.Error("el 429 no dice cuanto esperar")
@@ -202,7 +203,7 @@ func TestAlSextoIntentoFallidoResponde429(t *testing.T) {
 func TestBloqueadoNiSiquieraSeMiraLaContrasena(t *testing.T) {
 	svc, repo, _ := svcConAna(t, true)
 
-	for n := 0; n < auth.MaxIntentos; n++ {
+	for n := 0; n < auth.MaxIntentosPorCorreo; n++ {
 		_, _ = svc.IniciarSesion(context.Background(), IntentoDeSesion{
 			Email: "ana@casa.com", Password: "no-es-la-contrasena", IP: "203.0.113.9",
 		})
@@ -258,7 +259,7 @@ func TestUnErrorDeLaBaseNoGastaIntentos(t *testing.T) {
 
 	bueno := IntentoDeSesion{Email: "ana@casa.com", Password: passDePrueba, IP: "203.0.113.9"}
 
-	for n := 0; n <= auth.MaxIntentos; n++ {
+	for n := 0; n <= auth.MaxIntentosPorCorreo; n++ {
 		_, err := svc.IniciarSesion(context.Background(), bueno)
 		var p *httpx.Problem
 		if errors.As(err, &p) && p.Status == http.StatusTooManyRequests {
@@ -267,11 +268,82 @@ func TestUnErrorDeLaBaseNoGastaIntentos(t *testing.T) {
 	}
 }
 
+// El criterio 5 de CU-001, tal cual: agotar los intentos de un correo no deja
+// fuera a otra persona que entra desde la misma IP.
+//
+// No se cumplia. Los dos contadores cortaban en cinco y cada fallo cuenta en los
+// dos, asi que el quinto fallo de un correo agotaba tambien su IP. La prueba de
+// `auth` que decia "contadores independientes" pasaba porque solo anotaba
+// fallos en la clave del correo, que no es lo que hace IniciarSesion. Se
+// descubrio probando contra el stack: el superadmin recibia 429.
+func TestAgotarUnCorreoNoBloqueaAOtroUsuarioDeLaMismaIP(t *testing.T) {
+	svc, _, _ := svcConAna(t, true)
+	if _, err := svc.Crear(context.Background(), UsuarioNuevo{
+		Email: "beto@casa.com", Password: passDePrueba, DisplayName: "Beto", Roles: []string{RolAdmin},
+	}); err != nil {
+		t.Fatalf("Crear: %v", err)
+	}
+
+	for n := 0; n < auth.MaxIntentosPorCorreo; n++ {
+		_, _ = svc.IniciarSesion(context.Background(), IntentoDeSesion{
+			Email: "ana@casa.com", Password: "no-es-la-contrasena", IP: "203.0.113.9",
+		})
+	}
+
+	_, err := svc.IniciarSesion(context.Background(), IntentoDeSesion{
+		Email: "ana@casa.com", Password: passDePrueba, IP: "203.0.113.9",
+	})
+	var p *httpx.Problem
+	if !errors.As(err, &p) || p.Status != http.StatusTooManyRequests {
+		t.Fatalf("ana: err = %v; su correo tenia que quedar bloqueado", err)
+	}
+
+	if _, err := svc.IniciarSesion(context.Background(), IntentoDeSesion{
+		Email: "beto@casa.com", Password: passDePrueba, IP: "203.0.113.9",
+	}); err != nil {
+		t.Fatalf("beto, desde la misma IP y con su contrasena, no pudo entrar: %v", err)
+	}
+}
+
+// Un login bueno limpia el contador de SU correo, no el de la IP. Si limpiara
+// los dos, quien tenga una cuenta propia probaria correos ajenos hasta un fallo
+// antes del tope, entraria con la suya y volveria a empezar: el tope por IP no
+// frenaria nunca.
+func TestEntrarBienNoVaciaElContadorDeLaIP(t *testing.T) {
+	svc, _, _ := svcConAna(t, true)
+	ip := "203.0.113.9"
+
+	for n := 0; n < auth.MaxIntentosPorIP-1; n++ {
+		_, _ = svc.IniciarSesion(context.Background(), IntentoDeSesion{
+			Email: fmt.Sprintf("victima-%d@casa.com", n), Password: "no-es-la-contrasena", IP: ip,
+		})
+	}
+
+	if _, err := svc.IniciarSesion(context.Background(), IntentoDeSesion{
+		Email: "ana@casa.com", Password: passDePrueba, IP: ip,
+	}); err != nil {
+		t.Fatalf("la cuenta propia no entro: %v", err)
+	}
+
+	_, _ = svc.IniciarSesion(context.Background(), IntentoDeSesion{
+		Email: "otra-victima@casa.com", Password: "no-es-la-contrasena", IP: ip,
+	})
+
+	_, err := svc.IniciarSesion(context.Background(), IntentoDeSesion{
+		Email: "una-mas@casa.com", Password: "no-es-la-contrasena", IP: ip,
+	})
+	var p *httpx.Problem
+	if !errors.As(err, &p) || p.Status != http.StatusTooManyRequests {
+		t.Fatalf("err = %v; la IP llego a %d fallos y un login bueno en medio no puede vaciarla",
+			err, auth.MaxIntentosPorIP)
+	}
+}
+
 // Entrar bien limpia lo que se llevaba fallado.
 func TestEntrarBienDespejaElContador(t *testing.T) {
 	svc, _, _ := svcConAna(t, true)
 
-	for n := 0; n < auth.MaxIntentos-1; n++ {
+	for n := 0; n < auth.MaxIntentosPorCorreo-1; n++ {
 		_, _ = svc.IniciarSesion(context.Background(), IntentoDeSesion{
 			Email: "ana@casa.com", Password: "no-es-la-contrasena", IP: "203.0.113.9",
 		})
@@ -284,7 +356,7 @@ func TestEntrarBienDespejaElContador(t *testing.T) {
 	}
 
 	// Y despues quedan los cinco otra vez.
-	for n := 1; n <= auth.MaxIntentos; n++ {
+	for n := 1; n <= auth.MaxIntentosPorCorreo; n++ {
 		_, err := svc.IniciarSesion(context.Background(), IntentoDeSesion{
 			Email: "ana@casa.com", Password: "no-es-la-contrasena", IP: "203.0.113.9",
 		})

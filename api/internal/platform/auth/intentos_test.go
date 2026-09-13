@@ -16,7 +16,7 @@ func TestLosPrimerosIntentosPasanYElSextoNo(t *testing.T) {
 	i := intentosConReloj(&reloj)
 	clave := ClaveEmail("ana@casa.com")
 
-	for n := 1; n <= MaxIntentos; n++ {
+	for n := 1; n <= MaxIntentosPorCorreo; n++ {
 		if ok, _ := i.Permitido(clave); !ok {
 			t.Fatalf("el intento %d se bloqueo y no deberia", n)
 		}
@@ -39,7 +39,7 @@ func TestPasadaLaVentanaSeVuelveAPoder(t *testing.T) {
 	i := intentosConReloj(&reloj)
 	clave := ClaveEmail("ana@casa.com")
 
-	for n := 0; n < MaxIntentos; n++ {
+	for n := 0; n < MaxIntentosPorCorreo; n++ {
 		i.Fallo(clave)
 	}
 	if ok, _ := i.Permitido(clave); ok {
@@ -59,7 +59,7 @@ func TestLosContadoresPorCorreoYPorIpSonIndependientes(t *testing.T) {
 	i := intentosConReloj(&reloj)
 
 	// Cinco fallos del mismo correo desde IPs distintas: el correo se agota.
-	for n := 0; n < MaxIntentos; n++ {
+	for n := 0; n < MaxIntentosPorCorreo; n++ {
 		i.Fallo(ClaveEmail("ana@casa.com"))
 	}
 
@@ -76,7 +76,7 @@ func TestUnaIpAgotadaBloqueaAunqueElCorreoSeaNuevo(t *testing.T) {
 	i := intentosConReloj(&reloj)
 
 	// El caso de la fuerza bruta: correos distintos desde la misma IP.
-	for n := 0; n < MaxIntentos; n++ {
+	for n := 0; n < MaxIntentosPorIP; n++ {
 		i.Fallo(ClaveIP("10.0.0.9"))
 	}
 
@@ -93,12 +93,12 @@ func TestEntrarBienLimpiaLoQueSeLlevabaFallado(t *testing.T) {
 	i := intentosConReloj(&reloj)
 	clave := ClaveEmail("ana@casa.com")
 
-	for n := 0; n < MaxIntentos-1; n++ {
+	for n := 0; n < MaxIntentosPorCorreo-1; n++ {
 		i.Fallo(clave)
 	}
 	i.Exito(clave)
 
-	for n := 1; n <= MaxIntentos; n++ {
+	for n := 1; n <= MaxIntentosPorCorreo; n++ {
 		if ok, _ := i.Permitido(clave); !ok {
 			t.Fatalf("el intento %d se bloqueo despues de un exito", n)
 		}
@@ -114,7 +114,7 @@ func TestLaEsperaCuentaDesdeElIntentoMasViejo(t *testing.T) {
 	i := intentosConReloj(&reloj)
 	clave := ClaveEmail("ana@casa.com")
 
-	for n := 0; n < MaxIntentos; n++ {
+	for n := 0; n < MaxIntentosPorCorreo; n++ {
 		i.Fallo(clave)
 	}
 
@@ -133,7 +133,7 @@ func TestLaEsperaNuncaEsCero(t *testing.T) {
 	i := intentosConReloj(&reloj)
 	clave := ClaveIP("10.0.0.9")
 
-	for n := 0; n < MaxIntentos; n++ {
+	for n := 0; n < MaxIntentosPorIP; n++ {
 		i.Fallo(clave)
 	}
 
@@ -192,7 +192,7 @@ func TestElBarridoNoTiraLoQueTodaviaCuenta(t *testing.T) {
 	i := intentosConReloj(&reloj)
 	clave := ClaveEmail("ana@casa.com")
 
-	for n := 0; n < MaxIntentos; n++ {
+	for n := 0; n < MaxIntentosPorCorreo; n++ {
 		i.Fallo(clave)
 	}
 
@@ -217,11 +217,61 @@ func TestUnCorreoNoGastaElContadorDeUnaIpQueSeLlameIgual(t *testing.T) {
 
 	// Un correo cuyo texto es exactamente una IP. Rebuscado a proposito: es la
 	// unica forma de que dos espacios de nombres sin separar se toquen.
-	for n := 0; n < MaxIntentos; n++ {
+	// Hasta el tope de la IP, que es el mayor: con el del correo, la IP
+	// seguiria abierta aunque las dos claves fueran la misma, y la prueba
+	// pasaria sin prefijos.
+	for n := 0; n < MaxIntentosPorIP; n++ {
 		i.Fallo(ClaveEmail("10.0.0.9"))
 	}
 
 	if ok, _ := i.Permitido(ClaveIP("10.0.0.9")); !ok {
 		t.Error("los fallos de un correo agotaron el contador de la IP homonima")
+	}
+}
+
+// La IP aguanta mas que un correo. Cada fallo cuenta en los dos contadores a la
+// vez, asi que con el mismo tope agotar un correo agotaria su IP en el mismo
+// instante, y detras de un NAT una persona dejaria fuera a todos los demas.
+func TestLaIpAguantaMasFallosQueUnCorreo(t *testing.T) {
+	if MaxIntentosPorIP <= MaxIntentosPorCorreo {
+		t.Fatalf("tope por IP = %d, por correo = %d; el de la IP tiene que ser mayor",
+			MaxIntentosPorIP, MaxIntentosPorCorreo)
+	}
+
+	reloj := time.Now()
+	i := intentosConReloj(&reloj)
+	ip := ClaveIP("10.0.0.9")
+
+	for n := 0; n < MaxIntentosPorCorreo; n++ {
+		i.Fallo(ip)
+	}
+	if ok, _ := i.Permitido(ip); !ok {
+		t.Fatalf("la IP se bloqueo con %d fallos, el tope del correo", MaxIntentosPorCorreo)
+	}
+
+	for n := MaxIntentosPorCorreo; n < MaxIntentosPorIP; n++ {
+		i.Fallo(ip)
+	}
+	if ok, _ := i.Permitido(ip); ok {
+		t.Fatalf("la IP siguio abierta con %d fallos", MaxIntentosPorIP)
+	}
+}
+
+// El numero va escrito a mano, y no con la constante, a proposito: todas las
+// demas pruebas se escalan con MaxIntentosPorIP, asi que con un tope de mil
+// seguian pasando mientras la IP dejaba de frenar a nadie. Una mutacion lo
+// demostro. Quien suba el tope tiene que tocar esta prueba y decir contra que
+// lo cambia.
+func TestUnaIpSeCortaAlVigesimoFallo(t *testing.T) {
+	reloj := time.Now()
+	i := intentosConReloj(&reloj)
+	ip := ClaveIP("10.0.0.9")
+
+	for n := 0; n < 20; n++ {
+		i.Fallo(ip)
+	}
+
+	if ok, _ := i.Permitido(ip); ok {
+		t.Error("la IP siguio abierta despues de 20 fallos en la ventana")
 	}
 }
