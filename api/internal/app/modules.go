@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/elyares/go-starter/api/internal/modules/content"
 	"github.com/elyares/go-starter/api/internal/modules/identity"
 	"github.com/elyares/go-starter/api/internal/modules/settings"
 	"github.com/elyares/go-starter/api/internal/platform/auth"
@@ -27,9 +28,17 @@ import (
 // de los dos esta mal cortado.
 // Devuelve error porque armar el modulo de identidad exige una llave de firma
 // valida, y un starter que arranca con una llave vacia firma tokens que
-// cualquiera puede reproducir. Es preferible no levantar.
+// cualquiera puede reproducir. Es preferible no levantar. Por lo mismo falla si
+// el catalogo de bloques de content no compila.
 func Modules(cfg config.Config, pool *pgxpool.Pool) ([]Module, error) {
 	firmante, err := auth.NewFirmante(cfg.JWTSigningKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// content compila su catalogo de bloques al armarse: un esquema roto no
+	// levanta, en vez de ser un 500 en el primer guardado.
+	contenido, err := content.New(pool)
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +47,7 @@ func Modules(cfg config.Config, pool *pgxpool.Pool) ([]Module, error) {
 		// primero: los demas dependen de el
 		identity.New(pool, cfg.IsDev(), firmante, auth.NewIntentos(), auth.NewEmisor(cfg.CookieSecure)),
 		settings.New(pool),
-		// content.New(...),    // fase 3
+		contenido,
 		// catalog.New(...),    // <- un fork agrega su dominio aqui
 	}, nil
 }

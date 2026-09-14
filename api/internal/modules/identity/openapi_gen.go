@@ -61,6 +61,12 @@ type Problem struct {
 	Type     *string `json:"type,omitempty"`
 }
 
+// PaginaId defines model for PaginaId.
+type PaginaId = openapi_types.UUID
+
+// Slug defines model for Slug.
+type Slug = string
+
 // XsrfToken defines model for XsrfToken.
 type XsrfToken = string
 

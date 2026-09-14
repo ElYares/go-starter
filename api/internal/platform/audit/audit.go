@@ -73,6 +73,25 @@ func ForUpdate(ctx context.Context) (Fields, error) {
 	}, nil
 }
 
+// ForAppend sella el alta de una fila que no se modifica nunca: solo las dos
+// columnas de creacion.
+//
+// Existe para las tablas de historia —las versiones de una pagina, por
+// ejemplo— donde `updated_at` no tendria nada que contar. Usar ForInsert ahi
+// obligaria a crear dos columnas que siempre valen lo mismo que las otras dos,
+// y que invitan a pensar que la fila se puede editar.
+func ForAppend(ctx context.Context) (Fields, error) {
+	quien, err := actor(ctx)
+	if err != nil {
+		return Fields{}, err
+	}
+
+	return Fields{
+		Columns: []string{"created_at", "created_by"},
+		Values:  []any{ahora().UTC(), quien},
+	}, nil
+}
+
 // ColumnList devuelve "created_at, created_by, ..." para un INSERT.
 func (f Fields) ColumnList() string { return strings.Join(f.Columns, ", ") }
 

@@ -129,8 +129,14 @@ type SettingsPage struct {
 // Page defines model for Page.
 type Page = int
 
+// PaginaId defines model for PaginaId.
+type PaginaId = openapi_types.UUID
+
 // Size defines model for Size.
 type Size = int
+
+// Slug defines model for Slug.
+type Slug = string
 
 // ListarSettingsParams defines parameters for ListarSettings.
 type ListarSettingsParams struct {

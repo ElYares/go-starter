@@ -42,6 +42,16 @@ tags:
       **No hay DELETE, y es deliberado.** El codigo de la landing lee claves por
       nombre, asi que borrar una no deja un hueco sino una pantalla rota, y sin
       rastro de que hubo algo ahi. Una clave que sobra se apaga con su valor.
+  - name: content
+    description: |
+      Las paginas de la landing, con versiones.
+
+      **Guardar crea una version; publicar apunta a una.** Lo que ve el publico
+      es solo la version apuntada, asi que editar no toca lo publicado, y
+      revertir es publicar una version anterior. Ver la Decision 006.
+
+      Las paginas no tienen dueno: son del sitio, no de quien las creo. Quien
+      tiene `content.page.write` edita cualquiera.
 
 paths:
   /healthz:
@@ -470,6 +480,315 @@ paths:
         "500":
           $ref: "#/components/responses/Problem"
 
+  /public/pages/{slug}:
+    parameters:
+      - $ref: "#/components/parameters/Slug"
+    get:
+      tags: [content]
+      summary: La version publicada de una pagina
+      description: |
+        Devuelve **solo** la version publicada. Una pagina que existe pero
+        nunca se publico responde `404`, igual que una que no existe: el
+        publico no tiene por que saber que hay un borrador.
+
+        La consume el renderizado en servidor de la landing.
+      operationId: leerPaginaPublica
+      security: []
+      responses:
+        "200":
+          description: La pagina publicada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginaPublica"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+  /pages:
+    get:
+      tags: [content]
+      summary: Listar las paginas
+      description: |
+        Sigue el molde de coleccion de `docs/04-reglas-de-crud.md` seccion 3.
+        Cada fila es un resumen, sin bloques: el contenido se pide pagina por
+        pagina.
+      operationId: listarPaginas
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+        - name: sort
+          in: query
+          description: |
+            `campo,dir` con `dir` en `asc` (por omision) o `desc`. Todo orden
+            termina con un desempate estable por `id`.
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - slug
+                - slug,asc
+                - slug,desc
+                - updatedAt
+                - updatedAt,asc
+                - updatedAt,desc
+          example: ["updatedAt,desc"]
+        - name: published
+          in: query
+          description: Filtra por si la pagina tiene una version publicada.
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Una pagina de paginas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginasPage"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+    post:
+      tags: [content]
+      summary: Crear una pagina
+      description: |
+        Crea la pagina y su version 1, **sin publicar**. El `slug` repetido es
+        `409`.
+
+        Los bloques se validan contra el esquema de su tipo al guardar, no al
+        publicar: un bloque invalido es `400` con el indice del bloque y el
+        campo, por ejemplo `blocks[2].props.title`, y no se escribe nada.
+      operationId: crearPagina
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaginaNueva"
+      responses:
+        "201":
+          description: Creada
+          headers:
+            Location:
+              description: URL de la pagina recien creada
+              schema:
+                type: string
+              example: /api/v1/pages/0192a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pagina"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+  /pages/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PaginaId"
+
+    get:
+      tags: [content]
+      summary: Leer una pagina con su ultima version
+      description: |
+        Devuelve el borrador —la version de numero mayor— y cual esta
+        publicada. El `ETag` es el que se manda en `If-Match` para guardar.
+      operationId: leerPagina
+      responses:
+        "200":
+          description: La pagina
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pagina"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+    put:
+      tags: [content]
+      summary: Guardar una pagina, que crea una version nueva
+      description: |
+        Cada guardado crea una fila nueva en las versiones y **no toca la
+        publicada**. El titulo, el SEO y los bloques viajan en la version; el
+        `slug` es la direccion de la pagina y no se versiona: cambiarlo cambia
+        la URL publica al instante.
+
+        `If-Match` es **obligatorio**. Si en la base hay otra version, alguien
+        guardo en medio y la respuesta es `409`.
+      operationId: guardarPagina
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaginaModificacion"
+      responses:
+        "200":
+          description: Guardada
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pagina"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+    delete:
+      tags: [content]
+      summary: Borrar una pagina y todas sus versiones
+      description: |
+        Borrado real: la pagina y sus versiones se van juntas. Si estaba
+        publicada, su URL publica pasa a responder `404`.
+      operationId: borrarPagina
+      responses:
+        "204":
+          description: Borrada
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+  /pages/{id}/versions:
+    parameters:
+      - $ref: "#/components/parameters/PaginaId"
+    get:
+      tags: [content]
+      summary: Listar las versiones de una pagina
+      description: |
+        Resumenes, sin bloques, de la mas nueva a la mas vieja por omision. Es
+        de donde sale el `versionId` para publicar una version anterior.
+      operationId: listarVersiones
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+        - name: sort
+          in: query
+          description: |
+            `campo,dir`. Por omision `number,desc`. El numero es unico dentro
+            de la pagina, asi que tambien es el desempate.
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - number
+                - number,asc
+                - number,desc
+          example: ["number,desc"]
+      responses:
+        "200":
+          description: Una pagina de versiones
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionesPage"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+  /pages/{id}/publish:
+    parameters:
+      - $ref: "#/components/parameters/PaginaId"
+    post:
+      tags: [content]
+      summary: Publicar una version
+      description: |
+        Publicar es apuntar: la pagina publica pasa a ser esa version, de forma
+        atomica. Revertir es publicar una version anterior; no se borra
+        ninguna.
+
+        No cambia el `ETag` de la pagina: publicar no toca el borrador, y quien
+        lo esta editando no tiene por que recibir un `409`.
+
+        Una version de **otra** pagina es `400` nombrando `versionId`.
+      operationId: publicarPagina
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Publicacion"
+      responses:
+        "200":
+          description: Publicada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pagina"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -503,6 +822,34 @@ components:
         minimum: 1
         maximum: 100
         default: 20
+
+    Slug:
+      name: slug
+      in: path
+      required: true
+      description: La direccion de la pagina, por ejemplo `inicio`.
+      schema:
+        type: string
+        maxLength: 80
+        pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+      example: inicio
+
+    PaginaId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: El `ETag` que devolvio la lectura. `*` no se acepta.
+      schema:
+        type: string
+      example: "\"7\""
 
     XsrfToken:
       name: X-XSRF-TOKEN
@@ -712,6 +1059,223 @@ components:
       properties:
         value: {}
         isPublic: { type: boolean, default: false }
+
+    Bloque:
+      description: |
+        Una pieza de la pagina. `type` elige el componente que la dibuja y el
+        esquema que valida sus `props`; los tipos viven en el catalogo del
+        modulo `content` (`api/internal/modules/content/bloques/`), que es lo
+        que un fork edita para cambiar el lenguaje visual del sitio.
+
+        `props` se declara aqui como objeto libre porque su forma depende del
+        tipo: la valida el servidor al guardar, contra el esquema del catalogo.
+      type: object
+      required: [id, type, props]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Unico dentro de la pagina. Lo usa el editor para seguir al bloque al moverlo.
+          example: b1
+        type:
+          type: string
+          example: hero
+        props:
+          type: object
+          additionalProperties: true
+          example: { title: Hola, subtitle: Una landing editable }
+
+    PaginaResumen:
+      type: object
+      required: [id, slug, title, version, draftNumber, publishedNumber, updatedAt, updatedBy]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string, example: inicio }
+        title:
+          type: string
+          description: El titulo del borrador, que puede no ser el publicado.
+          example: Inicio
+        version:
+          type: integer
+          minimum: 1
+          description: La del `ETag`. Sube con cada guardado.
+        draftNumber:
+          type: integer
+          minimum: 1
+          description: El numero de la version mas nueva.
+        publishedNumber:
+          type: [integer, "null"]
+          minimum: 1
+          description: El numero de la version publicada; nulo si nunca se publico.
+        updatedAt: { type: string, format: date-time }
+        updatedBy:
+          type: [string, "null"]
+          format: uuid
+
+    Pagina:
+      description: |
+        La pagina con su borrador, que es la version de numero mayor. Lo
+        publicado se identifica por `publishedVersionId`; si coincide con
+        `draftVersionId`, no hay cambios sin publicar.
+      type: object
+      required:
+        - id
+        - slug
+        - version
+        - title
+        - seoTitle
+        - seoDescription
+        - blocks
+        - note
+        - draftVersionId
+        - draftNumber
+        - publishedVersionId
+        - publishedNumber
+        - createdAt
+        - updatedAt
+        - updatedBy
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string, example: inicio }
+        version:
+          type: integer
+          minimum: 1
+          description: Se devuelve tambien como `ETag`.
+        title: { type: string, example: Inicio }
+        seoTitle: { type: [string, "null"] }
+        seoDescription: { type: [string, "null"] }
+        blocks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bloque"
+        note:
+          type: [string, "null"]
+          description: La nota del guardado que creo el borrador.
+        draftVersionId: { type: string, format: uuid }
+        draftNumber: { type: integer, minimum: 1 }
+        publishedVersionId:
+          type: [string, "null"]
+          format: uuid
+          description: Nulo si la pagina nunca se publico.
+        publishedNumber: { type: [integer, "null"], minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        updatedBy:
+          type: [string, "null"]
+          format: uuid
+
+    PaginasPage:
+      description: El envoltorio de coleccion. Ver `SettingsPage`.
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaginaResumen"
+        page:
+          $ref: "#/components/schemas/PageMeta"
+
+    PaginaNueva:
+      description: |
+        El cuerpo de alta. No acepta `version`, `id` ni nada de auditoria:
+        mandarlos es un `400`, no un campo ignorado en silencio.
+      type: object
+      required: [slug, title, blocks]
+      additionalProperties: false
+      properties:
+        slug:
+          type: string
+          maxLength: 80
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+          example: nosotros
+        title: { type: string, minLength: 1, maxLength: 120 }
+        seoTitle: { type: [string, "null"], maxLength: 120 }
+        seoDescription: { type: [string, "null"], maxLength: 300 }
+        blocks:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/Bloque"
+        note:
+          type: [string, "null"]
+          maxLength: 280
+          description: Para que sirvio este guardado, por ejemplo "cambie el hero".
+
+    PaginaModificacion:
+      description: |
+        El cuerpo de un guardado. Reemplaza el borrador completo: lo que no
+        venga no se conserva de la version anterior.
+      type: object
+      required: [slug, title, blocks]
+      additionalProperties: false
+      properties:
+        slug:
+          type: string
+          maxLength: 80
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+        title: { type: string, minLength: 1, maxLength: 120 }
+        seoTitle: { type: [string, "null"], maxLength: 120 }
+        seoDescription: { type: [string, "null"], maxLength: 300 }
+        blocks:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/Bloque"
+        note: { type: [string, "null"], maxLength: 280 }
+
+    VersionResumen:
+      type: object
+      required: [id, number, title, note, published, createdAt, createdBy]
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: integer, minimum: 1 }
+        title: { type: string }
+        note: { type: [string, "null"] }
+        published:
+          type: boolean
+          description: Si es la version que ve el publico.
+        createdAt: { type: string, format: date-time }
+        createdBy:
+          type: [string, "null"]
+          format: uuid
+
+    VersionesPage:
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/VersionResumen"
+        page:
+          $ref: "#/components/schemas/PageMeta"
+
+    Publicacion:
+      type: object
+      required: [versionId]
+      additionalProperties: false
+      properties:
+        versionId:
+          type: string
+          format: uuid
+          description: Una version de ESTA pagina.
+
+    PaginaPublica:
+      description: Solo lo que la landing necesita para dibujar la pagina.
+      type: object
+      required: [slug, title, seoTitle, seoDescription, blocks]
+      properties:
+        slug: { type: string, example: inicio }
+        title: { type: string, example: Inicio }
+        seoTitle: { type: [string, "null"] }
+        seoDescription: { type: [string, "null"] }
+        blocks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bloque"
 
     Problem:
       description: |
