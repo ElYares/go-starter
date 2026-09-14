@@ -8,6 +8,8 @@ package app
 import (
 	"fmt"
 	"net/http"
+
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Defines values for HealthStatus.
@@ -102,6 +104,12 @@ type ReadinessChecks string
 
 // ReadinessStatus defines model for Readiness.Status.
 type ReadinessStatus string
+
+// PaginaId defines model for PaginaId.
+type PaginaId = openapi_types.UUID
+
+// Slug defines model for Slug.
+type Slug = string
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {

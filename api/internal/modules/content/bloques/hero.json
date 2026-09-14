@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "hero",
+  "description": "La portada de una pagina: un titulo grande, una bajada y, si se quiere, un llamado a la accion.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title"],
+  "properties": {
+    "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "subtitle": { "type": "string", "maxLength": 300 },
+    "cta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "href"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "href": {
+          "description": "Una ruta del sitio o una URL http(s). Nada de javascript: ni data:, que la landing pintaria como enlace.",
+          "type": "string",
+          "maxLength": 500,
+          "pattern": "^(/|https?://)"
+        }
+      }
+    }
+  }
+}

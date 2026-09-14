@@ -262,6 +262,157 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/public/pages/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description La direccion de la pagina, por ejemplo `inicio`.
+                 * @example inicio
+                 */
+                slug: components["parameters"]["Slug"];
+            };
+            cookie?: never;
+        };
+        /**
+         * La version publicada de una pagina
+         * @description Devuelve **solo** la version publicada. Una pagina que existe pero
+         *     nunca se publico responde `404`, igual que una que no existe: el
+         *     publico no tiene por que saber que hay un borrador.
+         *
+         *     La consume el renderizado en servidor de la landing.
+         */
+        get: operations["leerPaginaPublica"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar las paginas
+         * @description Sigue el molde de coleccion de `docs/04-reglas-de-crud.md` seccion 3.
+         *     Cada fila es un resumen, sin bloques: el contenido se pide pagina por
+         *     pagina.
+         */
+        get: operations["listarPaginas"];
+        put?: never;
+        /**
+         * Crear una pagina
+         * @description Crea la pagina y su version 1, **sin publicar**. El `slug` repetido es
+         *     `409`.
+         *
+         *     Los bloques se validan contra el esquema de su tipo al guardar, no al
+         *     publicar: un bloque invalido es `400` con el indice del bloque y el
+         *     campo, por ejemplo `blocks[2].props.title`, y no se escribe nada.
+         */
+        post: operations["crearPagina"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pages/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PaginaId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Leer una pagina con su ultima version
+         * @description Devuelve el borrador —la version de numero mayor— y cual esta
+         *     publicada. El `ETag` es el que se manda en `If-Match` para guardar.
+         */
+        get: operations["leerPagina"];
+        /**
+         * Guardar una pagina, que crea una version nueva
+         * @description Cada guardado crea una fila nueva en las versiones y **no toca la
+         *     publicada**. El titulo, el SEO y los bloques viajan en la version; el
+         *     `slug` es la direccion de la pagina y no se versiona: cambiarlo cambia
+         *     la URL publica al instante.
+         *
+         *     `If-Match` es **obligatorio**. Si en la base hay otra version, alguien
+         *     guardo en medio y la respuesta es `409`.
+         */
+        put: operations["guardarPagina"];
+        post?: never;
+        /**
+         * Borrar una pagina y todas sus versiones
+         * @description Borrado real: la pagina y sus versiones se van juntas. Si estaba
+         *     publicada, su URL publica pasa a responder `404`.
+         */
+        delete: operations["borrarPagina"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pages/{id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PaginaId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Listar las versiones de una pagina
+         * @description Resumenes, sin bloques, de la mas nueva a la mas vieja por omision. Es
+         *     de donde sale el `versionId` para publicar una version anterior.
+         */
+        get: operations["listarVersiones"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pages/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PaginaId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publicar una version
+         * @description Publicar es apuntar: la pagina publica pasa a ser esa version, de forma
+         *     atomica. Revertir es publicar una version anterior; no se borra
+         *     ninguna.
+         *
+         *     No cambia el `ETag` de la pagina: publicar no toca el borrador, y quien
+         *     lo esta editando no tiene por que recibir un `409`.
+         *
+         *     Una version de **otra** pagina es `400` nombrando `versionId`.
+         */
+        post: operations["publicarPagina"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -416,6 +567,154 @@ export interface components {
             isPublic: boolean;
         };
         /**
+         * @description Una pieza de la pagina. `type` elige el componente que la dibuja y el
+         *     esquema que valida sus `props`; los tipos viven en el catalogo del
+         *     modulo `content` (`api/internal/modules/content/bloques/`), que es lo
+         *     que un fork edita para cambiar el lenguaje visual del sitio.
+         *
+         *     `props` se declara aqui como objeto libre porque su forma depende del
+         *     tipo: la valida el servidor al guardar, contra el esquema del catalogo.
+         */
+        Bloque: {
+            /**
+             * @description Unico dentro de la pagina. Lo usa el editor para seguir al bloque al moverlo.
+             * @example b1
+             */
+            id: string;
+            /** @example hero */
+            type: string;
+            /**
+             * @example {
+             *       "title": "Hola",
+             *       "subtitle": "Una landing editable"
+             *     }
+             */
+            props: {
+                [key: string]: unknown;
+            };
+        };
+        PaginaResumen: {
+            /** Format: uuid */
+            id: string;
+            /** @example inicio */
+            slug: string;
+            /**
+             * @description El titulo del borrador, que puede no ser el publicado.
+             * @example Inicio
+             */
+            title: string;
+            /** @description La del `ETag`. Sube con cada guardado. */
+            version: number;
+            /** @description El numero de la version mas nueva. */
+            draftNumber: number;
+            /** @description El numero de la version publicada; nulo si nunca se publico. */
+            publishedNumber: number | null;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: uuid */
+            updatedBy: string | null;
+        };
+        /**
+         * @description La pagina con su borrador, que es la version de numero mayor. Lo
+         *     publicado se identifica por `publishedVersionId`; si coincide con
+         *     `draftVersionId`, no hay cambios sin publicar.
+         */
+        Pagina: {
+            /** Format: uuid */
+            id: string;
+            /** @example inicio */
+            slug: string;
+            /** @description Se devuelve tambien como `ETag`. */
+            version: number;
+            /** @example Inicio */
+            title: string;
+            seoTitle: string | null;
+            seoDescription: string | null;
+            blocks: components["schemas"]["Bloque"][];
+            /** @description La nota del guardado que creo el borrador. */
+            note: string | null;
+            /** Format: uuid */
+            draftVersionId: string;
+            draftNumber: number;
+            /**
+             * Format: uuid
+             * @description Nulo si la pagina nunca se publico.
+             */
+            publishedVersionId: string | null;
+            publishedNumber: number | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: uuid */
+            updatedBy: string | null;
+        };
+        /** @description El envoltorio de coleccion. Ver `SettingsPage`. */
+        PaginasPage: {
+            content: components["schemas"]["PaginaResumen"][];
+            page: components["schemas"]["PageMeta"];
+        };
+        /**
+         * @description El cuerpo de alta. No acepta `version`, `id` ni nada de auditoria:
+         *     mandarlos es un `400`, no un campo ignorado en silencio.
+         */
+        PaginaNueva: {
+            /** @example nosotros */
+            slug: string;
+            title: string;
+            seoTitle?: string | null;
+            seoDescription?: string | null;
+            blocks: components["schemas"]["Bloque"][];
+            /** @description Para que sirvio este guardado, por ejemplo "cambie el hero". */
+            note?: string | null;
+        };
+        /**
+         * @description El cuerpo de un guardado. Reemplaza el borrador completo: lo que no
+         *     venga no se conserva de la version anterior.
+         */
+        PaginaModificacion: {
+            slug: string;
+            title: string;
+            seoTitle?: string | null;
+            seoDescription?: string | null;
+            blocks: components["schemas"]["Bloque"][];
+            note?: string | null;
+        };
+        VersionResumen: {
+            /** Format: uuid */
+            id: string;
+            number: number;
+            title: string;
+            note: string | null;
+            /** @description Si es la version que ve el publico. */
+            published: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            createdBy: string | null;
+        };
+        VersionesPage: {
+            content: components["schemas"]["VersionResumen"][];
+            page: components["schemas"]["PageMeta"];
+        };
+        Publicacion: {
+            /**
+             * Format: uuid
+             * @description Una version de ESTA pagina.
+             */
+            versionId: string;
+        };
+        /** @description Solo lo que la landing necesita para dibujar la pagina. */
+        PaginaPublica: {
+            /** @example inicio */
+            slug: string;
+            /** @example Inicio */
+            title: string;
+            seoTitle: string | null;
+            seoDescription: string | null;
+            blocks: components["schemas"]["Bloque"][];
+        };
+        /**
          * @description La forma unica de error de toda la API (RFC 7807) con dos campos
          *     propios: `code`, estable y en mayusculas, es lo que el cliente
          *     interpreta; `traceId` es lo que se busca en el log.
@@ -458,6 +757,17 @@ export interface components {
          *     negacion de servicio de una linea.
          */
         Size: number;
+        /**
+         * @description La direccion de la pagina, por ejemplo `inicio`.
+         * @example inicio
+         */
+        Slug: string;
+        PaginaId: string;
+        /**
+         * @description El `ETag` que devolvio la lectura. `*` no se acepta.
+         * @example "7"
+         */
+        IfMatch: string;
         /**
          * @description El valor de la cookie `XSRF-TOKEN`, reenviado a mano. Es el doble envio:
          *     quien no puede leer la cookie —otro origen— no puede forjar la cabecera.
@@ -912,6 +1222,280 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    leerPaginaPublica: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description La direccion de la pagina, por ejemplo `inicio`.
+                 * @example inicio
+                 */
+                slug: components["parameters"]["Slug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La pagina publicada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginaPublica"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    listarPaginas: {
+        parameters: {
+            query?: {
+                /** @description Numero de pagina, base 0. */
+                page?: components["parameters"]["Page"];
+                /**
+                 * @description Tamano de pagina. El tope es **duro**: pedir mas devuelve 100 y
+                 *     `page.size` reporta el efectivo. Sin el, `?size=1000000` seria una
+                 *     negacion de servicio de una linea.
+                 */
+                size?: components["parameters"]["Size"];
+                /**
+                 * @description `campo,dir` con `dir` en `asc` (por omision) o `desc`. Todo orden
+                 *     termina con un desempate estable por `id`.
+                 * @example [
+                 *       "updatedAt,desc"
+                 *     ]
+                 */
+                sort?: ("slug" | "slug,asc" | "slug,desc" | "updatedAt" | "updatedAt,asc" | "updatedAt,desc")[];
+                /** @description Filtra por si la pagina tiene una version publicada. */
+                published?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Una pagina de paginas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginasPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    crearPagina: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaginaNueva"];
+            };
+        };
+        responses: {
+            /** @description Creada */
+            201: {
+                headers: {
+                    /**
+                     * @description URL de la pagina recien creada
+                     * @example /api/v1/pages/0192a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b
+                     */
+                    Location?: string;
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Pagina"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    leerPagina: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PaginaId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La pagina */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Pagina"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    guardarPagina: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description El `ETag` que devolvio la lectura. `*` no se acepta.
+                 * @example "7"
+                 */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: components["parameters"]["PaginaId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaginaModificacion"];
+            };
+        };
+        responses: {
+            /** @description Guardada */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Pagina"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    borrarPagina: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PaginaId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Borrada */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    listarVersiones: {
+        parameters: {
+            query?: {
+                /** @description Numero de pagina, base 0. */
+                page?: components["parameters"]["Page"];
+                /**
+                 * @description Tamano de pagina. El tope es **duro**: pedir mas devuelve 100 y
+                 *     `page.size` reporta el efectivo. Sin el, `?size=1000000` seria una
+                 *     negacion de servicio de una linea.
+                 */
+                size?: components["parameters"]["Size"];
+                /**
+                 * @description `campo,dir`. Por omision `number,desc`. El numero es unico dentro
+                 *     de la pagina, asi que tambien es el desempate.
+                 * @example [
+                 *       "number,desc"
+                 *     ]
+                 */
+                sort?: ("number" | "number,asc" | "number,desc")[];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PaginaId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Una pagina de versiones */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionesPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    publicarPagina: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PaginaId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Publicacion"];
+            };
+        };
+        responses: {
+            /** @description Publicada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Pagina"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
         };
     };

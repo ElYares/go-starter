@@ -144,3 +144,23 @@ func TestLosFragmentosDeSqlSeNumeranDesdeDondeSeLesDice(t *testing.T) {
 		t.Errorf("assignments = %q", got)
 	}
 }
+
+// Una fila de historia no tiene columnas de modificacion. Si ForAppend las
+// devolviera, el INSERT fallaria contra la tabla; si devolviera las de
+// modificacion en lugar de las de creacion, la fila nunca diria quien la hizo.
+func TestElAltaDeHistoriaSellaSoloLaCreacion(t *testing.T) {
+	instante := time.Date(2026, 9, 14, 12, 0, 0, 0, time.UTC)
+	conReloj(t, instante)
+
+	f, err := ForAppend(ctxCon(juan))
+	if err != nil {
+		t.Fatalf("ForAppend: %v", err)
+	}
+
+	if esperadas := []string{"created_at", "created_by"}; !slices.Equal(f.Columns, esperadas) {
+		t.Fatalf("columnas = %v, se esperaban %v", f.Columns, esperadas)
+	}
+	if f.Values[0] != instante || f.Values[1] != uuidDe(t, juan) {
+		t.Errorf("valores = %#v", f.Values)
+	}
+}

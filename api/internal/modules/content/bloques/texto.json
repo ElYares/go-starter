@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "texto",
+  "description": "Texto corrido. Es texto plano, no HTML ni Markdown: los saltos de linea separan parrafos.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["body"],
+  "properties": {
+    "title": { "type": "string", "maxLength": 120 },
+    "body": { "type": "string", "minLength": 1, "maxLength": 5000 }
+  }
+}

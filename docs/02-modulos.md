@@ -17,7 +17,7 @@ internal/modules/content/
 ├── repo.go          # persistencia. Sin reglas de negocio
 ├── handler.go       # HTTP: decodifica, llama al service, responde
 ├── ports.go         # interfaces de lo que este módulo necesita de fuera
-├── migrations/      # 0001_pages.sql, 0002_page_versions.sql …
+├── migrations/      # 0001_contenido.sql …
 └── *_test.go
 ```
 
@@ -77,6 +77,7 @@ func (m *Module) Routes(r *httpx.Router) {
         r.Get   ("/pages/{id}",         m.get,     rbac.Require("content.page.read"))
         r.Put   ("/pages/{id}",         m.update,  rbac.Require("content.page.write"))
         r.Delete("/pages/{id}",         m.delete,  rbac.Require("content.page.write"))
+        r.Get   ("/pages/{id}/versions", m.versions, rbac.Require("content.page.read"))
         r.Post  ("/pages/{id}/publish", m.publish, rbac.Require("content.page.publish"))
     })
     // Lo público va aparte y sin guard, a propósito y a la vista.

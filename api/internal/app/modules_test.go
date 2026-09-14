@@ -131,7 +131,7 @@ func TestElRegistroDeclaraLosModulosEsperados(t *testing.T) {
 	// identity va primero porque es el orden de las migraciones, y las llaves
 	// foraneas de los demas apuntan a sus usuarios. Cambiar este orden no es
 	// cosmetico: rompe la migracion en una base vacia.
-	esperado := []string{"identity", "settings"}
+	esperado := []string{"identity", "settings", "content"}
 	if strings.Join(nombres, ",") != strings.Join(esperado, ",") {
 		t.Errorf("modulos registrados = %v, se esperaba %v\nsi agregaste uno, actualiza esta prueba y confirma que su posicion en la lista es la que quieres: es el orden en que corren las migraciones", nombres, esperado)
 	}
