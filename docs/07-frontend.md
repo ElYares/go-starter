@@ -30,7 +30,8 @@ web/app/
 │   │   └── views/
 │   ├── admin/                # shell: navegación lateral, encabezado, layout
 │   ├── content/              # editor de páginas y bloques
-│   └── auth/                 # login, store de sesión, guards
+│   ├── auth/                 # login, store de sesión, guards
+│   └── settings/             # la pantalla de configuración del sitio
 ├── shared/
 │   ├── ui/                   # los primitivos propios. Ver abajo
 │   ├── blocks/               # registro de tipos de bloque del CMS
@@ -228,8 +229,17 @@ de un fork recién instalado.
 - `/admin/**` exige sesión: sin ella, redirige a `/login` con `?next=`. Vive en
   `middleware/sesion.global.ts`, y la decisión en `modules/auth/sesion.ts`
   (`decidirAcceso`), que se prueba sin Nuxt
-- Las acciones se ocultan por permiso leído de `me`, **como conveniencia**. La
-  autorización real vive en el servidor y hay pruebas que lo confirman
+- Las secciones se ocultan por permiso leído de `me`, **como conveniencia**. La
+  autorización real vive en el servidor y hay pruebas que lo confirman. Cada
+  entrada del menú declara el permiso de la operación con la que su pantalla
+  abre, en `modules/admin/secciones.ts`; un fork agrega ahí su dominio
+- **Ocultar no protege la ruta.** Quien escribe la URL de una sección oculta
+  llega a la pantalla, y lo que la niega es el `403` del servidor a su primera
+  petición. Por eso la pantalla tiene un quinto estado, **sin permiso**, que dice
+  qué permiso falta y no ofrece reintentar
+- **Una pantalla abierta que pierde la sesión va al login ella misma**, con
+  `usePedirConSesion` (`modules/auth/composables/`). El guard solo lo detecta al
+  navegar, y el cliente ya renovó y reintentó antes de que llegue un `401`
 - El guard cierra por omisión: es **global**, así que una ruta nueva bajo
   `/admin` está protegida sin que nadie se acuerde de protegerla
 - Sin la cookie `has_session` no se pide `me`: sería un `401` que ya se sabía.
