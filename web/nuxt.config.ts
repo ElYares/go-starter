@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url'
+
 // El dominio local lo sirve devherd a traves del edge.
 const DOMAIN = 'go-starter.localhost'
 
@@ -56,6 +58,13 @@ export default defineNuxtConfig({
       // de serlo el dia que el dominio no termine en .localhost, y entonces el
       // sintoma es un 403 sin explicacion.
       allowedHosts: [DOMAIN],
+      // El catalogo de bloques vive en el api y el editor lo importa
+      // (app/shared/blocks/catalogo.ts). Queda fuera de la raiz de web, y sin
+      // esto Vite se niega a servirlo en desarrollo: el build funciona y el
+      // editor en `nuxt dev` no carga.
+      fs: {
+        allow: [fileURLToPath(new URL('../api/internal/modules/content/bloques', import.meta.url))],
+      },
     },
   },
 })

@@ -4,18 +4,39 @@
   "description": "La portada de una pagina: un titulo grande, una bajada y, si se quiere, un llamado a la accion.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["title"],
+  "required": [
+    "title"
+  ],
   "properties": {
-    "title": { "type": "string", "minLength": 1, "maxLength": 120 },
-    "subtitle": { "type": "string", "maxLength": 300 },
+    "title": {
+      "title": "Titulo",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "subtitle": {
+      "title": "Bajada",
+      "type": "string",
+      "maxLength": 300
+    },
     "cta": {
+      "title": "Llamado a la accion",
       "type": "object",
       "additionalProperties": false,
-      "required": ["label", "href"],
+      "required": [
+        "label",
+        "href"
+      ],
       "properties": {
-        "label": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "label": {
+          "title": "Texto del boton",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
         "href": {
-          "description": "Una ruta del sitio o una URL http(s). Nada de javascript: ni data:, que la landing pintaria como enlace.",
+          "title": "Enlace",
+          "description": "Una ruta del sitio, como /precios, o una direccion que empiece con https://",
           "type": "string",
           "maxLength": 500,
           "pattern": "^(/|https?://)"

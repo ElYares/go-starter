@@ -4,9 +4,20 @@
   "description": "Texto corrido. Es texto plano, no HTML ni Markdown: los saltos de linea separan parrafos.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["body"],
+  "required": [
+    "body"
+  ],
   "properties": {
-    "title": { "type": "string", "maxLength": 120 },
-    "body": { "type": "string", "minLength": 1, "maxLength": 5000 }
+    "title": {
+      "title": "Titulo",
+      "type": "string",
+      "maxLength": 120
+    },
+    "body": {
+      "title": "Texto",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 5000
+    }
   }
 }
