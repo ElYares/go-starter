@@ -113,25 +113,52 @@ base y se edita desde el dashboard.
 ```sql
 pages (
   id uuid pk,
-  slug text not null,                   -- 'inicio', 'nosotros', 'precios'
-  title text not null,
-  seo_title text, seo_description text, seo_image_id uuid,
+  slug text not null,                   -- 'inicio', 'nosotros', 'precios'. NO se versiona
   published_version_id uuid null,       -- null = nunca publicada
-  version int not null default 1,
+  version int not null default 1,       -- la del ETag: sube con cada guardado
   created_at, created_by, updated_at, updated_by,
-  unique (slug)
+  unique (slug),
+  foreign key (id, published_version_id) references page_versions (page_id, id)
 )
 
 page_versions (
   id uuid pk,
   page_id uuid fk pages on delete cascade,
   number int not null,                  -- 1, 2, 3… local a la página
-  blocks jsonb not null,                -- el contenido. Ver abajo
+  title text not null,
+  seo_title text, seo_description text,
+  blocks jsonb not null,                -- siempre un array. Ver abajo
   note text,                            -- "cambié el hero", opcional
-  created_at, created_by,
-  unique (page_id, number)
+  created_at, created_by,               -- solo creación: una versión no se edita
+  unique (page_id, number),
+  unique (page_id, id)                  -- lo que permite la llave compuesta de pages
 )
 ```
+
+Cuatro cosas que no son obvias:
+
+- **El título y el SEO viven en la versión, no en la página.** Si vivieran en
+  `pages`, cambiar el título se vería en público al guardar, sin publicar, y
+  revertir a una versión anterior dejaría el título nuevo con los bloques
+  viejos. `pages` se queda con lo que no es contenido: la dirección y el
+  puntero. `seo_image_id` llega con `media` en la fase 4
+- **El `slug` no se versiona**: es la dirección. Cambiarlo cambia la URL pública
+  al instante, que es lo que se espera de renombrar
+- **La llave de la versión publicada es compuesta** (`(id, published_version_id)`
+  contra `(page_id, id)`). Una llave simple dejaría publicar la versión de otra
+  página, y `/nosotros` mostraría el contenido de `/precios`. Con el puntero
+  nulo no se comprueba, que es justo "nunca publicada"
+- **Publicar no sube `version`.** No toca el borrador, y quien lo está editando
+  no tiene por qué recibir un `409`. El número de versión se calcula con
+  `max(number) + 1` dentro de la transacción que ya bloqueó la fila de la
+  página al comparar el `If-Match`: dos guardados a la vez no pueden sacar el
+  mismo número
+
+La migración siembra la página `inicio`, publicada, con un bloque de cada tipo
+del catálogo: como las claves de `settings`, es lo que hace que un fork recién
+clonado muestre una portada y no un `404`. Una prueba comprueba que esos bloques
+cumplen el catálogo; si no, el primer guardado de quien la edite sin tocar nada
+rebotaría.
 
 ### Por qué versiones y no una tabla `blocks`
 
@@ -156,12 +183,28 @@ page_versions (
 Un **tipo de bloque** es dos cosas que viajan juntas:
 
 1. Un componente Vue en `web/app/shared/blocks/<Tipo>.vue`
-2. Un esquema JSON en el backend que valida sus `props`
+2. Un JSON Schema en `api/internal/modules/content/bloques/<tipo>.json`, cuyo
+   nombre de archivo es el `type`
+
+El starter trae `hero`, `features` y `texto`. Agregar un tipo es agregar un
+archivo y su componente; el catálogo se compila al arrancar, y un esquema mal
+escrito impide levantar en vez de ser un `500` en el primer guardado.
 
 El backend valida `props` contra el esquema del tipo **antes de guardar**. Sin
 eso, `jsonb` es un basurero y el error aparece en la landing en producción, no
-en el editor. El catálogo de tipos es lo que un fork edita para cambiar el
-lenguaje visual del sitio.
+en el editor. Los errores salen todos juntos y nombran el bloque por su índice
+y el campo por su ruta (`blocks[2].props.items[0].title`), que es lo que el
+editor puede resaltar sin buscar. Un `type` que no está en el catálogo es `400`,
+y el mensaje lista los que hay.
+
+El catálogo de tipos es lo que un fork edita para cambiar el lenguaje visual del
+sitio.
+
+**Las páginas no tienen dueño.** Son del sitio, no de quien las creó: quien tiene
+`content.page.write` edita cualquiera. Filtrar por `created_by` dejaría la
+portada sembrada sin nadie que la pueda editar, y huérfana la página del que se
+fue. Es la excepción escrita al punto "el usuario A recibe `404` sobre un
+recurso de B" del checklist de `04-reglas-de-crud.md`.
 
 ## Medios (`modules/media`)
 

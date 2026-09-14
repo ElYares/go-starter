@@ -10,6 +10,7 @@ api/openapi.yaml
    ├─ oapi-codegen        → un openapi_gen.go POR MÓDULO
    │                        api/internal/app/openapi_gen.go              (tag: salud)
    │                        api/internal/modules/settings/openapi_gen.go (tag: settings)
+   │                        api/internal/modules/content/openapi_gen.go  (tag: content)
    └─ openapi-typescript  → web/app/shared/api/generated/schema.ts
 ```
 

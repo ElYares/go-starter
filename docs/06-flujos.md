@@ -155,6 +155,8 @@ sequenceDiagram
   publicar apunta a una. Quien edita puede guardar sin permiso de publicar
 - **La validación de bloques ocurre al guardar, no al publicar.** Si esperas a
   publicar, el editor deja construir durante media hora algo que va a rebotar
+- **Publicar no cambia el `ETag`.** No toca el borrador, así que quien lo está
+  editando puede seguir guardando sin un `409`
 - **Revertir es publicar una versión anterior.** No hay lógica de deshacer, y
   por eso no hay bugs de deshacer
 - Con `If-Match` viejo → `409`. Dos personas editando la misma página se
