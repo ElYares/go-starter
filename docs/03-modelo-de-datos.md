@@ -186,7 +186,9 @@ Un **tipo de bloque** es dos cosas que viajan juntas:
 2. Un JSON Schema en `api/internal/modules/content/bloques/<tipo>.json`, cuyo
    nombre de archivo es el `type`
 
-El starter trae `hero`, `features` y `texto`. Agregar un tipo es agregar un
+El starter trae `hero`, `features` y `texto`. Cada propiedad lleva `title`, que el
+editor del dashboard usa como etiqueta del campo: el formulario se genera del
+mismo esquema que valida (`07-frontend.md`). Agregar un tipo es agregar un
 archivo y su componente; el catálogo se compila al arrancar, y un esquema mal
 escrito impide levantar en vez de ser un `500` en el primer guardado.
 
