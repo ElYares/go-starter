@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { ClienteApi } from '~/shared/api/client'
 import { ApiError } from '~/shared/api/errors'
 import {
   cerrarSesion,
@@ -8,6 +7,7 @@ import {
   esRutaProtegida,
   iniciarSesion,
   mensajeDeLogin,
+  type ApiDeSesion,
   type Perfil,
 } from './sesion'
 
@@ -34,7 +34,7 @@ describe('iniciarSesion', () => {
   // El login responde 204 sin cuerpo: lo que se sabe de la persona sale de me.
   it('hace login y despues pide me, en ese orden', async () => {
     const orden: string[] = []
-    const api: ClienteApi = {
+    const api: ApiDeSesion = {
       post: vi.fn(async (ruta: string) => {
         orden.push(`POST ${ruta}`)
         return undefined as never
@@ -50,7 +50,7 @@ describe('iniciarSesion', () => {
   })
 
   it('si el login falla, no pide me', async () => {
-    const api: ClienteApi = {
+    const api: ApiDeSesion = {
       post: vi.fn(async () => {
         throw apiError(401)
       }),
@@ -222,7 +222,7 @@ describe('decidirAcceso', () => {
 
 describe('cerrarSesion', () => {
   it('llama al logout', async () => {
-    const api: ClienteApi = { post: vi.fn(async () => undefined as never), get: vi.fn() }
+    const api: ApiDeSesion = { post: vi.fn(async () => undefined as never), get: vi.fn() }
 
     await cerrarSesion(api)
 
@@ -232,7 +232,7 @@ describe('cerrarSesion', () => {
   // Quien pulso "cerrar sesion" sale igual: el servidor borra las cookies
   // aunque su base falle, y un error aqui lo dejaria dentro creyendo que salio.
   it('no lanza si el servidor falla', async () => {
-    const api: ClienteApi = {
+    const api: ApiDeSesion = {
       post: vi.fn(async () => {
         throw apiError(502)
       }),

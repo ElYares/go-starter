@@ -159,3 +159,49 @@ describe('las respuestas', () => {
     expect((e as ApiError).unavailable).toBe(true)
   })
 })
+
+describe('las escrituras del molde', () => {
+  // docs/04-reglas-de-crud.md seccion 4: un reemplazo sin If-Match es 400 en el
+  // servidor. El cliente lo manda tal cual lo devolvio la lectura, comillas
+  // incluidas, porque es un ETag y no un numero.
+  it('put manda If-Match, el CSRF y el cuerpo', async () => {
+    const { api, jar, llamadas } = servidorFalso(() => json({ version: 8 }))
+    jar.cookies = 'XSRF-TOKEN=x'
+
+    await expect(api.put('/pages/1', { title: 'T' }, { ifMatch: '"7"' })).resolves.toEqual({ version: 8 })
+
+    const l = llamadas[0]!
+    expect(l.init.method).toBe('PUT')
+    expect(cabecera(l, 'If-Match')).toBe('"7"')
+    expect(cabecera(l, CABECERA_CSRF)).toBe('x')
+    expect(l.init.body).toBe('{"title":"T"}')
+  })
+
+  it('delete es una mutacion: lleva CSRF, sin cuerpo y sin If-Match', async () => {
+    const { api, jar, llamadas } = servidorFalso(() => new Response(null, { status: 204 }))
+    jar.cookies = 'XSRF-TOKEN=x'
+
+    await expect(api.delete('/pages/1')).resolves.toBeUndefined()
+
+    const l = llamadas[0]!
+    expect(l.init.method).toBe('DELETE')
+    expect(cabecera(l, CABECERA_CSRF)).toBe('x')
+    expect(l.init.body).toBeUndefined()
+    expect(cabecera(l, 'If-Match')).toBeUndefined()
+  })
+
+  it('un 409 del put sale como ApiError con su status', async () => {
+    const { api, jar } = servidorFalso(() =>
+      new Response(JSON.stringify({ status: 409, code: 'CONFLICT', traceId: 't-409' }), {
+        status: 409,
+        headers: { 'Content-Type': 'application/problem+json' },
+      }),
+    )
+    jar.cookies = 'XSRF-TOKEN=x'
+
+    const e = await api.put('/pages/1', {}, { ifMatch: '"1"' }).catch((x: unknown) => x)
+
+    expect(e).toBeInstanceOf(ApiError)
+    expect((e as ApiError).status).toBe(409)
+  })
+})

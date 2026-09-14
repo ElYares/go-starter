@@ -46,9 +46,24 @@ export interface OpcionesCliente {
   candado?: Candado
 }
 
+export interface OpcionesPeticion {
+  signal?: AbortSignal
+}
+
+export interface OpcionesEscritura extends OpcionesPeticion {
+  /**
+   * El ETag que devolvio la lectura, tal cual (`"7"`). Es obligatorio en todo
+   * reemplazo del molde: sin el, el servidor responde 400 en vez de pisar el
+   * trabajo de otra persona.
+   */
+  ifMatch?: string
+}
+
 export interface ClienteApi {
-  get<T>(ruta: string, init?: { signal?: AbortSignal }): Promise<T>
-  post<T>(ruta: string, cuerpo?: unknown, init?: { signal?: AbortSignal }): Promise<T>
+  get<T>(ruta: string, init?: OpcionesPeticion): Promise<T>
+  post<T>(ruta: string, cuerpo?: unknown, init?: OpcionesPeticion): Promise<T>
+  put<T>(ruta: string, cuerpo: unknown, init: OpcionesEscritura & { ifMatch: string }): Promise<T>
+  delete(ruta: string, init?: OpcionesPeticion): Promise<void>
 }
 
 /**
@@ -85,7 +100,7 @@ export function crearCliente({ base, fetch: pedir, cookies, candado = sinCandado
     // nada que copiar y el servidor responderia 403 sin que la persona pueda
     // hacer nada. Pasa siempre en `/login`: la pagina la sirve Nuxt, no Go, asi
     // que abrirla no siembra la cookie.
-    await enviarUnaVez('GET', RUTA_SEMILLA, undefined, signal)
+    await enviarUnaVez('GET', RUTA_SEMILLA, undefined, { signal })
     return leerCookie(COOKIE_CSRF, cookies())
   }
 
@@ -118,10 +133,10 @@ export function crearCliente({ base, fetch: pedir, cookies, candado = sinCandado
     return renovando
   }
 
-  async function enviar<T>(metodo: string, ruta: string, cuerpo: unknown, signal?: AbortSignal): Promise<T> {
+  async function enviar<T>(metodo: string, ruta: string, cuerpo: unknown, init: OpcionesEscritura = {}): Promise<T> {
     const csrfAlSalir = leerCookie(COOKIE_CSRF, cookies())
     try {
-      return await enviarUnaVez<T>(metodo, ruta, cuerpo, signal)
+      return await enviarUnaVez<T>(metodo, ruta, cuerpo, init)
     } catch (fallo) {
       const renovable =
         fallo instanceof ApiError &&
@@ -139,12 +154,14 @@ export function crearCliente({ base, fetch: pedir, cookies, candado = sinCandado
       // Una sola vez. Un segundo 401 con la sesion recien renovada no se
       // arregla renovando otra vez, y reintentar en bucle es un cliente que
       // martillea al servidor.
-      return enviarUnaVez<T>(metodo, ruta, cuerpo, signal)
+      return enviarUnaVez<T>(metodo, ruta, cuerpo, init)
     }
   }
 
-  async function enviarUnaVez<T>(metodo: string, ruta: string, cuerpo: unknown, signal?: AbortSignal): Promise<T> {
+  async function enviarUnaVez<T>(metodo: string, ruta: string, cuerpo: unknown, init: OpcionesEscritura = {}): Promise<T> {
+    const { signal, ifMatch } = init
     const cabeceras: Record<string, string> = { Accept: 'application/json, application/problem+json' }
+    if (ifMatch !== undefined) cabeceras['If-Match'] = ifMatch
 
     if (metodo !== 'GET') {
       const token = await tokenCSRF(signal)
@@ -188,9 +205,14 @@ export function crearCliente({ base, fetch: pedir, cookies, candado = sinCandado
     }
   }
 
+  // El reintento tras un refresh repite la peticion ENTERA, If-Match incluido:
+  // la version que el cliente creia estar editando no cambia porque se haya
+  // renovado la sesion.
   return {
-    get: (ruta, init) => enviar('GET', ruta, undefined, init?.signal),
-    post: (ruta, cuerpo, init) => enviar('POST', ruta, cuerpo, init?.signal),
+    get: (ruta, init) => enviar('GET', ruta, undefined, init),
+    post: (ruta, cuerpo, init) => enviar('POST', ruta, cuerpo, init),
+    put: (ruta, cuerpo, init) => enviar('PUT', ruta, cuerpo, init),
+    delete: (ruta, init) => enviar<void>('DELETE', ruta, undefined, init),
   }
 }
 

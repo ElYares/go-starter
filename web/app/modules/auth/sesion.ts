@@ -7,6 +7,9 @@ import type { Schemas } from '~/shared/api/generated'
 // `composables/` y en `middleware/`, y es pegamento de pocas lineas.
 
 export type Perfil = Schemas['Perfil']
+
+/** Lo unico que la sesion le pide al cliente. Las pruebas lo imitan con dos funciones. */
+export type ApiDeSesion = Pick<ClienteApi, 'get' | 'post'>
 export type Credenciales = Schemas['Credenciales']
 
 export { COOKIE_PISTA } from '~/shared/api/client'
@@ -18,12 +21,12 @@ const DESTINO_POR_OMISION = '/admin'
  * CU-001 visto desde el navegador: el login responde 204 sin cuerpo, y lo que
  * el frontend sabe de la persona sale de `me`. Es una sola fuente a proposito.
  */
-export async function iniciarSesion(api: ClienteApi, credenciales: Credenciales): Promise<Perfil> {
+export async function iniciarSesion(api: ApiDeSesion, credenciales: Credenciales): Promise<Perfil> {
   await api.post<void>('/auth/login', credenciales)
   return pedirPerfil(api)
 }
 
-export function pedirPerfil(api: ClienteApi): Promise<Perfil> {
+export function pedirPerfil(api: ApiDeSesion): Promise<Perfil> {
   return api.get<Perfil>('/auth/me')
 }
 
@@ -32,7 +35,7 @@ export function pedirPerfil(api: ClienteApi): Promise<Perfil> {
  * cookies aunque su base falle, y quien pulso "cerrar sesion" tiene que salir
  * igual. Lo que no se puede es dejarlo dentro creyendo que salio.
  */
-export async function cerrarSesion(api: ClienteApi): Promise<void> {
+export async function cerrarSesion(api: ApiDeSesion): Promise<void> {
   try {
     await api.post<void>('/auth/logout')
   } catch {
