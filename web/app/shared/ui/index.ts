@@ -9,6 +9,7 @@ export { default as BaseField } from './BaseField.vue'
 export { default as BaseInput } from './BaseInput.vue'
 export { default as BaseSelect } from './BaseSelect.vue'
 export { default as BaseTable } from './BaseTable.vue'
+export { default as BaseTextarea } from './BaseTextarea.vue'
 export { default as BaseToast } from './BaseToast.vue'
 
 export type { ColumnaTabla } from './BaseTable.vue'
