@@ -119,23 +119,64 @@ primer fork que meta su color de marca lo rompe, y no hay ningún síntoma visib
 
 ## Bloques del CMS
 
-Un tipo de bloque son dos cosas que viajan juntas: un componente y su esquema.
+Un tipo de bloque son dos cosas que viajan juntas: el JSON Schema que valida sus
+`props` en el api (`api/internal/modules/content/bloques/<tipo>.json`) y su
+componente aquí.
 
 ```ts
 // shared/blocks/registry.ts
-export const blocks = {
-  hero:     { component: () => import('./HeroBlock.vue'),     label: 'Portada' },
-  features: { component: () => import('./FeaturesBlock.vue'), label: 'Características' },
-  cta:      { component: () => import('./CtaBlock.vue'),      label: 'Llamado a la acción' },
+export const bloques = {
+  hero:     { component: HeroBlock,     label: 'Portada' },
+  features: { component: FeaturesBlock, label: 'Caracteristicas' },
+  texto:    { component: TextoBlock,    label: 'Texto' },
 }
 ```
 
-- El renderizador recorre `page.blocks` y resuelve `type` contra el registro
-- Un `type` desconocido **no revienta**: cae a un componente vacío que registra
-  el aviso. Un fork que borra un bloque no puede tumbar páginas ya publicadas
-- El editor lee el mismo registro para ofrecer "agregar bloque". Una sola fuente
-- Cambiar el lenguaje visual de un fork es escribir componentes de bloque
-  nuevos, no tocar el editor ni el backend
+- **`RenderDeBloques`** recorre `page.blocks` y resuelve `type` contra el
+  registro. Lo usa la landing y lo usará la vista previa del editor
+- Un `type` desconocido **no revienta**: cae a `BloqueDesconocido`, que no pinta
+  nada y deja el aviso en el log (en SSR, el del servidor de Nuxt). Un fork que
+  borra un bloque no puede tumbar páginas ya publicadas
+- **`registry.spec.ts` compara el registro con los archivos del catálogo del
+  api** y falla si uno tiene un tipo que el otro no. Para verlos, el contenedor
+  de web monta `bloques/` de solo lectura (`compose.yaml`)
+- `resolverBloque` usa `Object.hasOwn`: un `type: "constructor"` encontraría
+  algo en el prototipo y lo intentaría pintar
+- Los bloques **no importan nada de Nuxt**, como los `Base*`: el enlace del hero
+  es un `<a>`, que funciona sin JavaScript, y se prueban sin el arnés
+- **El texto nunca va por `v-html`.** El esquema dice texto plano, y quien tiene
+  `content.page.write` no puede inyectar marcado en la landing pública
+- Importaciones directas, no `() => import()`: son tres componentes chicos que la
+  portada usa siempre
+- El editor leerá el mismo registro para ofrecer "agregar bloque". Cambiar el
+  lenguaje visual de un fork es escribir componentes de bloque nuevos (y sus
+  esquemas), no tocar el editor
+
+## La landing
+
+`pages/index.vue` y `pages/[...slug].vue` montan `modules/landing/views/PaginaView.vue`,
+que pide `GET /public/pages/{slug}` en SSR por la red interna. `/` es el slug
+`inicio`, y `/inicio` redirige a `/` con `301` para no tener la portada en dos
+URLs. La lógica que no necesita a Nuxt vive en `modules/landing/pagina.ts`.
+
+| La API… | La landing responde |
+|---|---|
+| entrega la página | `200`, con `title`, `description` y Open Graph del SEO de la versión publicada |
+| responde `404` o `400`, o la ruta no puede ser un slug (`/a/b`, `/Mayus`) | `404` |
+| no responde, o responde `502`/`503`/`504` | `503` |
+| cualquier otra cosa | `500` |
+
+Tres trampas:
+
+- **`useFetch` pone `statusCode: 500` también cuando la API está apagada.** Nuxt
+  envuelve el fallo de red en un `NuxtError` con 500 por omisión. Lo que
+  distingue "no respondió" es la causa: `cause.response` existe solo si hubo
+  respuesta. Por eso `statusRespondido` y no `error.statusCode`
+- **Con `curl` pelado, el error sale en JSON**: Nitro mira `Accept`. Un navegador
+  o un buscador manda `text/html` y ve `error.vue`; el código es el mismo. En
+  desarrollo ese JSON trae la pila
+- **La clave de página es la ruta completa** (`definePageMeta({ key })`): sin
+  ella, pasar de `/precios` a `/nosotros` reutiliza la vista con los datos viejos
 
 ## La capa de API
 

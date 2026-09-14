@@ -6,20 +6,25 @@ import { BaseButton, BaseEmptyState } from '~/shared/ui'
 // La pantalla de error de toda la app. Cumple el estado "error" de
 // docs/07-frontend.md: dice que paso, deja reintentar y ensena el traceId, que
 // es lo que se busca en el log del servidor.
-const props = defineProps<{ error: NuxtError<{ traceId?: string; destino?: string }> }>()
-
-useHead({ title: 'Algo fallo · go-starter' })
+const props = defineProps<{ error: NuxtError<{ traceId?: string; destino?: string; landing?: boolean }> }>()
 
 const noExiste = computed(() => props.error.statusCode === 404)
+
+useHead({ title: () => (noExiste.value ? 'Pagina no encontrada · go-starter' : 'Algo fallo · go-starter') })
 const traceId = computed(() => props.error.data?.traceId)
 
 // "Tu sesion no se ha cerrado" solo cuando es cierto que el problema es la
-// caida: es lo que evita que alguien crea que perdio su trabajo y se vaya.
-const descripcion = computed(() =>
-  props.error.statusCode === 503
-    ? 'Tu sesion no se ha cerrado. Cuando el servidor vuelva, reintenta.'
-    : 'Vuelve a intentarlo. Si se repite, comparte la referencia de abajo.',
-)
+// caida: es lo que evita que alguien crea que perdio su trabajo y se vaya. En la
+// landing no hay sesion que perder: quien visita solo necesita saber que es
+// temporal.
+const descripcion = computed(() => {
+  if (props.error.statusCode !== 503) {
+    return 'Vuelve a intentarlo. Si se repite, comparte la referencia de abajo.'
+  }
+  return props.error.data?.landing
+    ? 'Estamos teniendo un problema temporal. Vuelve a intentarlo en unos minutos.'
+    : 'Tu sesion no se ha cerrado. Cuando el servidor vuelva, reintenta.'
+})
 
 // Reintentar RECARGA el destino, y no es un capricho: `clearError({ redirect })`
 // hacia la ruta en la que ya esta la URL es una navegacion duplicada, Vue

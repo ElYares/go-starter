@@ -129,6 +129,9 @@ Tres trampas de este flujo, todas caras:
 - **Un `block.type` desconocido no puede tumbar la página.** El registro de
   bloques resuelve lo que no conoce a un componente vacío y lo registra. Un
   fork que borra un tipo de bloque no debe romper páginas viejas que lo usan
+- **Una API caída no se ve como un 500 en `useFetch`, se ve igual.** El error
+  envuelto trae `statusCode: 500` con o sin respuesta; la landing tiene que
+  mirar la causa para responder `503`. Ver `07-frontend.md`, "La landing"
 
 ---
 

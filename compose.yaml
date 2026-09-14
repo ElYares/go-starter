@@ -96,6 +96,12 @@ services:
       # —`../api/openapi.yaml`— sirva dentro del contenedor y fuera de el. En CI
       # no hay compose, y el script tiene que funcionar igual.
       - ./api/openapi.yaml:/api/openapi.yaml:ro
+      # El catalogo de bloques, por la misma razon y a la misma altura: una
+      # prueba de web comprueba que cada tipo del api tiene su componente, y
+      # lee `../api/internal/modules/content/bloques/`. Es una carpeta y no un
+      # archivo suelto, asi que un `git stash` no la deja apuntando al inodo
+      # viejo como pasa con openapi.yaml.
+      - ./api/internal/modules/content/bloques:/api/internal/modules/content/bloques:ro
       # Tapa el node_modules del bind mount: los binarios nativos que instala el
       # host (glibc) no corren en la imagen alpine, y al reves igual.
       - web_node_modules:/workspace/node_modules
