@@ -16,6 +16,8 @@ function servidorDeSesion(
     recursoResponde?: number
     conPista?: boolean
     conCsrf?: boolean
+    // Mira cada peticion tal como sale del cliente, cabeceras incluidas.
+    alPedir?: (init: RequestInit) => void
   } = {},
 ) {
   const jar = new Map<string, string>()
@@ -31,6 +33,7 @@ function servidorDeSesion(
     const cabeceras = init.headers as Record<string, string>
     estado.llamadas.push(`${init.method} ${ruta}`)
     estado.csrfEnviados.push(cabeceras[CABECERA_CSRF])
+    opciones.alPedir?.(init)
 
     // Como la cadena global de Go: todo GET sin cookie CSRF la siembra.
     if (init.method === 'GET' && !jar.has('XSRF-TOKEN')) jar.set('XSRF-TOKEN', 'x-sembrado')
@@ -285,5 +288,21 @@ describe('el refresh entre pestanas', () => {
       corrio = true
     })
     expect(corrio).toBe(true)
+  })
+})
+
+describe('el refresh y las escrituras', () => {
+  // Renovar la sesion no cambia la version que se estaba editando: el
+  // reintento tiene que llevar el MISMO If-Match, o un guardado tras un at
+  // caducado saldria sin el y responderia 400.
+  it('el reintento de un put tras renovar repite el If-Match', async () => {
+    const ifMatches: Array<string | undefined> = []
+    const { pestana } = servidorDeSesion({
+      alPedir: (init) => ifMatches.push((init.headers as Record<string, string>)['If-Match']),
+    })
+
+    await pestana().put('/pages/1', { a: 1 }, { ifMatch: '"4"' })
+
+    expect(ifMatches).toEqual(['"4"', undefined, '"4"'])
   })
 })

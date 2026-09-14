@@ -148,9 +148,53 @@ export const bloques = {
   `content.page.write` no puede inyectar marcado en la landing pública
 - Importaciones directas, no `() => import()`: son tres componentes chicos que la
   portada usa siempre
-- El editor leerá el mismo registro para ofrecer "agregar bloque". Cambiar el
-  lenguaje visual de un fork es escribir componentes de bloque nuevos (y sus
-  esquemas), no tocar el editor
+- **El editor usa el mismo registro y el mismo catálogo.** `shared/blocks/catalogo.ts`
+  importa los JSON Schema del api en el build (`import.meta.glob`), y de ahí el
+  editor arma los formularios. Cambiar el lenguaje visual de un fork es escribir
+  un esquema y un componente por tipo; el editor no se toca
+- Cada propiedad del esquema lleva `title`: es la etiqueta del campo en el
+  editor. `catalogo.spec.ts` falla si falta
+
+## El editor de páginas
+
+`/admin/paginas` lista las páginas y `/admin/paginas/{id}` las edita (CU-004). Todo
+vive en `modules/content/`: la lógica sin Vue en `editor.ts`, las llamadas en
+`api.ts`, y componentes que reciben las operaciones como funciones, como
+`ListaDeSettings`.
+
+**Los formularios salen del JSON Schema del catálogo** (`CampoDeEsquema.vue`,
+recursivo). Entiende lo que usa el catálogo del starter:
+
+| En el esquema | En el editor |
+|---|---|
+| `string` | entrada; área de texto si `maxLength ≥ 300` y no tiene `pattern` |
+| `object` requerido | sus campos |
+| `object` opcional | "Agregar …" / "Quitar …" |
+| `array` | un grupo por elemento, con subir, bajar y quitar; respeta `minItems` y `maxItems` |
+| otra cosa | su JSON, sin editar, y se conserva al guardar |
+
+Un opcional vaciado se **quita** del objeto: "sin bajada" no es `subtitle: ""`.
+Un bloque nuevo nace con lo obligatorio de su esquema y nada más.
+
+Reglas del editor que no se ven en el marcado:
+
+- **Cada campo se nombra con la ruta del api** (`blocks[2].props.items[0].title`),
+  así el `errors[]` de un 400 llega solo al campo que lo tiene, y el bloque se
+  marca en rojo. Lo escrito no se toca
+- **Un 409 no guarda encima.** Avisa cuándo se guardó la otra versión —la lee,
+  no la aplica— y ofrece descartar y recargar. No dice *quién*: el api da
+  `updatedBy` como uuid y no hay con qué resolver el nombre
+- **No se publica con cambios sin guardar**: publicar apunta a una versión
+  guardada, y con cambios en pantalla publicaría algo distinto de lo que se ve
+- **Un tipo de bloque desconocido** se muestra como no reconocido, con su JSON,
+  y se deja quitar. Viaja tal cual al guardar; el servidor lo rechaza, y un
+  aviso lo dice antes
+- Revertir es "Publicar esta versión" en el historial. No hay borrar versiones
+- Salir con cambios sin guardar pregunta, dentro del dashboard y al cerrar la
+  pestaña (`EditorView.vue`)
+- **La copia del borrador es por JSON, no `structuredClone`**: la página llega
+  en un proxy reactivo y `structuredClone` lanza `DataCloneError` con él. El
+  editor se quedaba en "cargando" sin un error visible
 
 ## La landing
 
@@ -192,7 +236,8 @@ Son dos piezas, y no se mezclan:
 - **`shared/api/useApiFetch.ts`** — lo que se renderiza en servidor (la
   landing). Solo lecturas
 - **`shared/api/client.ts`** — el cliente del navegador, sobre `fetch` y sin
-  dependencias. Lo entrega `useApi()`, que **lanza en SSR** a propósito: lee
+  dependencias. `get`, `post`, `put` (con `ifMatch` obligatorio) y `delete`.
+  El reintento tras un refresh repite la petición entera, `If-Match` incluido Lo entrega `useApi()`, que **lanza en SSR** a propósito: lee
   `document.cookie`, y fallar en el sitio de la causa es mejor que un
   `document is not defined` tres llamadas más abajo
 

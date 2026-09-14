@@ -17,6 +17,7 @@ export interface Seccion {
  */
 export const SECCIONES: Seccion[] = [
   { ruta: '/admin', etiqueta: 'Inicio', permiso: null },
+  { ruta: '/admin/paginas', etiqueta: 'Paginas', permiso: 'content.page.read' },
   { ruta: '/admin/configuracion', etiqueta: 'Configuracion', permiso: 'settings.read' },
 ]
 
