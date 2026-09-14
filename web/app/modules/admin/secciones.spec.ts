@@ -21,9 +21,18 @@ describe('seccionesVisibles', () => {
     expect(seccionesVisibles(['settings', 'settings.re']).map((s) => s.ruta)).toEqual(['/admin'])
   })
 
-  it('cada seccion con permiso nombra uno de la forma modulo.accion', () => {
+  // CU-004: la entrada de paginas abre leyendo, asi que pide content.page.read.
+  it('con content.page.read aparecen las paginas; con solo publish, no', () => {
+    expect(seccionesVisibles(['content.page.read']).map((s) => s.ruta)).toEqual(['/admin', '/admin/paginas'])
+    expect(seccionesVisibles(['content.page.publish']).map((s) => s.ruta)).toEqual(['/admin'])
+  })
+
+  // `modulo.accion` o `modulo.recurso.accion`, como los declara el api
+  // (settings.read, content.page.read). Un permiso mal escrito aqui oculta la
+  // entrada a todo el mundo sin un error.
+  it('cada seccion con permiso nombra uno con la forma de los del api', () => {
     for (const s of SECCIONES.filter((x) => x.permiso !== null)) {
-      expect(s.permiso).toMatch(/^[a-z]+\.[a-z]+$/)
+      expect(s.permiso).toMatch(/^[a-z]+(\.[a-z]+){1,2}$/)
     }
   })
 })
