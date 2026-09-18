@@ -55,33 +55,56 @@ prestada.
 
 ## Agregar un módulo de dominio
 
-1. `cp -r internal/modules/_template internal/modules/orders`
-2. Ajustar `module.go`: `Name`, `Permissions`, `Routes`
-3. Escribir `migrations/0001_orders.sql` con las convenciones de
+```sh
+./scripts/nuevo-modulo.sh pedidos
+```
+
+Hace los pasos 1, 2 y 5: copia `_template` a `api/internal/modules/pedidos`,
+renombra el paquete, `Name()`, los permisos (`pedidos.read`, `pedidos.write`), la
+tabla y la ruta (`/pedidos`), y lo registra en `app/modules.go` —el import en su
+orden, que gofmt exige— y en la lista esperada de `app/modules_test.go`. Valida
+el nombre (es un paquete de Go: minúsculas y dígitos, sin guiones) antes de tocar
+nada. El resto sigue siendo a mano:
+
+1. ~~Copiar `_template`~~ (el script)
+2. ~~Ajustar `module.go`: `Name`, `Permissions`, `Routes`~~ (el script, con los
+   nombres del molde; lo propio del dominio es tuyo)
+3. Escribir `migrations/0001_inicial.sql` con las convenciones de
    `03-modelo-de-datos.md`
 4. Declarar en `ports.go` lo que necesite de otros módulos. **Ningún import de
-   otro módulo**
-5. Registrarlo en `app/modules.go`, después de sus dependencias
-6. Agregarlo a `openapi.yaml` y regenerar los dos lados
+   otro módulo** (salvo `identity`, por su `Actor`)
+5. ~~Registrarlo en `app/modules.go`~~ (el script)
+6. Agregarlo a `openapi.yaml` con el tag del módulo y regenerar los dos lados
 7. Recorrer el checklist de `04-reglas-de-crud.md` §8
-8. En el front: `web/app/modules/orders/` y su entrada en el shell del dashboard
+8. En el front: `web/app/modules/pedidos/` y su entrada en el shell del dashboard
 
 ## Quitar un módulo
 
 ```sh
-rm -rf api/internal/modules/catalog web/app/modules/catalog
-# quitar su línea de app/modules.go
-# quitar sus rutas de openapi.yaml y regenerar
+./scripts/quitar-modulo.sh pedidos
 go build ./... && npm run build
 ```
 
-Si eso no basta —si algo más deja de compilar— **es un defecto del starter, no
-del fork**: significa que alguien rompió la regla de que un módulo no importa
-otro. Se arregla arriba y se sube por PR.
+Borra la carpeta, su import y su línea del registro, y su nombre de la lista
+esperada. Sus rutas de `openapi.yaml`, si las tenía, se quitan a mano y se
+regenera. Un módulo que no se registra con `<nombre>.New(...)` en su propia
+línea —`media`, `content`, cableados con otros en `app/modules.go`— el script no
+lo toca: se quita a mano.
+
+Si con eso algo más deja de compilar **es un defecto del starter, no del fork**:
+significa que alguien rompió la regla de que un módulo no importa otro. Se
+arregla arriba y se sube por PR.
+
+**El CI recorre las dos recetas en cada PR** (job `fork`): agrega `pedidos`,
+comprueba formato, build, vet, sus migraciones y sus permisos, y las pruebas; lo
+quita, exige que el checkout quede exactamente como estaba, y vuelve a compilar
+y probar. Si el molde se pudre o un módulo importa otro, falla ahí.
 
 Nota sobre la base: borrar el código no borra las tablas de una base existente.
 En un fork nuevo no hay nada que borrar; en uno con datos, la limpieza es una
-migración explícita y deliberada.
+migración explícita y deliberada. **En desarrollo, el api recarga y migra solo**:
+agregar un módulo de prueba crea sus tablas en tu base local, y quitarlo no las
+borra.
 
 ## Traer mejoras del starter
 
