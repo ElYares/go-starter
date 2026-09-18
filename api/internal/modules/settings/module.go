@@ -29,8 +29,14 @@ type Module struct {
 	svc *Service
 }
 
-func New(pool *pgxpool.Pool) *Module {
-	return &Module{svc: &Service{repo: &Repo{pool: pool}}}
+// New devuelve error porque compila los esquemas de las claves: uno mal escrito
+// tiene que impedir arrancar, no ser un 500 la primera vez que alguien guarda.
+func New(pool *pgxpool.Pool, medios Medios) (*Module, error) {
+	es, err := cargarEsquemas()
+	if err != nil {
+		return nil, err
+	}
+	return &Module{svc: &Service{repo: &Repo{pool: pool}, esquemas: es, medios: medios}}, nil
 }
 
 func (m *Module) Name() string { return "settings" }

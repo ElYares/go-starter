@@ -6,11 +6,13 @@
 package media
 
 import (
+	"context"
 	"embed"
 	"errors"
 	"io/fs"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/elyares/go-starter/api/internal/platform/httpx"
@@ -107,4 +109,14 @@ func errorDeParametro(w http.ResponseWriter, r *http.Request, err error) {
 	default:
 		httpx.WriteProblem(w, r, httpx.ParamInvalid())
 	}
+}
+
+// Existe es lo que otros modulos preguntan por su puerto (settings.Medios): si
+// un id es una imagen subida. app lo conecta; nadie importa este paquete.
+func (m *Module) Existe(ctx context.Context, id uuid.UUID) (bool, error) {
+	_, err := m.svc.Leer(ctx, id)
+	if errors.Is(err, errNoExiste) {
+		return false, nil
+	}
+	return err == nil, err
 }

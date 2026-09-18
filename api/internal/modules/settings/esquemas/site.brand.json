@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Marca",
+  "description": "El nombre del sitio, su lema y su logo. Salen en la cabecera de la landing.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name"
+  ],
+  "properties": {
+    "name": {
+      "title": "Nombre",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "tagline": {
+      "title": "Lema",
+      "type": "string",
+      "maxLength": 160
+    },
+    "logo": {
+      "title": "Logo",
+      "description": "Una imagen subida: PNG, JPEG o WebP, hasta 5 MB",
+      "type": "string",
+      "format": "media-id"
+    }
+  }
+}

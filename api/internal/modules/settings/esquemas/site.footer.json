@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Pie",
+  "description": "El texto y los enlaces del pie de pagina.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "text": {
+      "title": "Texto",
+      "type": "string",
+      "maxLength": 300
+    },
+    "links": {
+      "title": "Enlaces",
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/enlace"
+      }
+    }
+  },
+  "$defs": {
+    "enlace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "href"
+      ],
+      "properties": {
+        "label": {
+          "title": "Texto",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "href": {
+          "title": "Enlace",
+          "description": "Una ruta del sitio, como /precios, o una direccion que empiece con https://",
+          "type": "string",
+          "maxLength": 500,
+          "pattern": "^(/([^/]|$)|https://)"
+        }
+      }
+    }
+  }
+}
