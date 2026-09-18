@@ -295,7 +295,7 @@ func (r *Repo) porQueNoDeshabilite(ctx context.Context, userID string) (Usuario,
 // SembrarPermisos reconcilia el catalogo con lo que declaran los modulos, y
 // reparte lo que corresponde a cada uno de los dos roles que no se configuran.
 //
-// Las cuatro sentencias van en UNA transaccion porque entre el borrado y las
+// Las sentencias van en UNA transaccion porque entre el borrado y las
 // concesiones hay un instante en el que el superadmin no tiene un permiso que
 // si deberia tener; sin la transaccion, una peticion que caiga justo ahi recibe
 // un 403 que nadie puede reproducir despues.
@@ -352,21 +352,31 @@ func (r *Repo) SembrarPermisos(ctx context.Context, perms []rbac.Permission) err
 		return err
 	}
 
-	// El admin arranca con lo que ningun modulo marco como sensible, y SOLO si
-	// todavia no tiene ninguna concesion. Es un punto de partida para un fork
-	// recien clonado, no una regla permanente.
+	// El admin recibe lo que ningun modulo marco como sensible, UNA vez por
+	// permiso: se le concede lo que todavia no se le ofrecio, y se anota la
+	// oferta. Lo que se le quite despues desde la pantalla de roles se queda
+	// quitado, porque la oferta sigue ahi; y el permiso de un modulo que llegue
+	// a una instalacion ya arrancada le llega igual, porque es nuevo.
 	//
-	// La condicion es lo que impide que la siembra pelee con el dashboard:
-	// quitarle un permiso al admin desde la pantalla de roles tiene que quedar
-	// quitado, y no volver en el siguiente despliegue. A partir del primer
-	// arranque, sus concesiones son datos que se editan.
+	// Las dos sentencias van en ese orden: al reves, la oferta ya estaria
+	// anotada cuando se busca lo que falta por ofrecer, y no se concederia nada.
 	const alAdmin = `insert into role_permissions (role_id, permission_key)
 			select ro.id, k
 			  from roles ro cross join unnest($2::text[]) as t(k)
 			 where ro.key = $1
-			   and not exists (select 1 from role_permissions rp where rp.role_id = ro.id)
+			   and not exists (select 1 from role_permission_offers o
+			                    where o.role_id = ro.id and o.permission_key = k)
 			on conflict do nothing`
 	if _, err := tx.Exec(ctx, alAdmin, RolAdmin, noSensibles); err != nil {
+		return err
+	}
+
+	const ofertasAlAdmin = `insert into role_permission_offers (role_id, permission_key)
+			select ro.id, k
+			  from roles ro cross join unnest($2::text[]) as t(k)
+			 where ro.key = $1
+			on conflict do nothing`
+	if _, err := tx.Exec(ctx, ofertasAlAdmin, RolAdmin, noSensibles); err != nil {
 		return err
 	}
 
