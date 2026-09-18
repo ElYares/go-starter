@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '~/shared/api/errors'
-import { erroresPorCampo, mover } from './esquema'
+import { erroresPorCampo, mover, resolverReferencias, type Esquema } from './esquema'
 
 describe('mover', () => {
   it('intercambia con el vecino y no muta la lista original', () => {
@@ -40,4 +40,35 @@ describe('los errores de un 400', () => {
     expect(erroresPorCampo(null)).toEqual({})
   })
 
+})
+
+describe('resolverReferencias', () => {
+  const enlace: Esquema = { type: 'object', title: 'Enlace', properties: { href: { type: 'string', title: 'Enlace' } } }
+
+  it('sustituye un $ref a $defs, tambien dentro de una lista', () => {
+    const r = resolverReferencias({
+      type: 'object',
+      properties: { links: { type: 'array', title: 'Enlaces', items: { $ref: '#/$defs/enlace' } } },
+      $defs: { enlace },
+    })
+    expect(r.properties!.links!.items).toEqual(enlace)
+  })
+
+  // Lo que el sitio del $ref dice de mas —un title propio— gana sobre la
+  // definicion: es lo que pide JSON Schema 2020-12.
+  it('conserva lo que el sitio del $ref agrega', () => {
+    const r = resolverReferencias({ type: 'array', items: { $ref: '#/$defs/enlace', title: 'Enlace del menu' }, $defs: { enlace } })
+    expect(r.items!.title).toBe('Enlace del menu')
+    expect(r.items!.properties).toEqual(enlace.properties)
+  })
+
+  it('una referencia que no encuentra, o que se nombra a si misma, se deja como esta', () => {
+    expect(resolverReferencias({ type: 'array', items: { $ref: '#/$defs/nada' } }).items).toEqual({ $ref: '#/$defs/nada' })
+    const ciclo = resolverReferencias({
+      type: 'array',
+      items: { $ref: '#/$defs/nodo' },
+      $defs: { nodo: { type: 'array', items: { $ref: '#/$defs/nodo' } } },
+    })
+    expect(ciclo.items!.items).toEqual({ $ref: '#/$defs/nodo' })
+  })
 })

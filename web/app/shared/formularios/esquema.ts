@@ -17,6 +17,56 @@ export interface Esquema {
   minItems?: number
   maxItems?: number
   pattern?: string
+  /**
+   * `media-id` es el id de una imagen subida: se edita con un campo de subida,
+   * no escribiendo el uuid. Los demas formatos se ignoran.
+   */
+  format?: string
+  $ref?: string
+  $defs?: Record<string, Esquema>
+}
+
+/** El `format` de un campo que guarda el id de una imagen (settings/esquemas). */
+export const FORMATO_MEDIO = 'media-id'
+
+/** El tope de una imagen, el mismo que aplica el api (media.MaxBytes). */
+export const MAX_BYTES_MEDIO = 5 * 1024 * 1024
+
+/**
+ * Donde se sirven los bytes de una imagen. El dashboard es SPA, asi que la ruta
+ * es la del navegador; es la misma que devuelve el api en `Medio.url`.
+ */
+export const urlDeMedio = (id: string) => `/api/v1/public/media/${id}`
+
+/**
+ * Devuelve el esquema con sus `$ref` locales (`#/$defs/enlace`) sustituidos por
+ * lo que nombran, para que el formulario no tenga que resolverlos al pintar.
+ *
+ * Solo entiende referencias a `$defs` del mismo archivo, que es lo que usan los
+ * esquemas del starter. Una que no encuentra, o una que se nombra a si misma,
+ * se deja como esta: el formulario la pinta como "no se puede editar" y
+ * conserva el valor, en vez de colgarse o inventar un campo.
+ */
+export function resolverReferencias(raiz: Esquema): Esquema {
+  const defs = raiz.$defs ?? {}
+
+  function resolver(e: Esquema, visitando: ReadonlySet<string>): Esquema {
+    if (e.$ref) {
+      const nombre = e.$ref.startsWith('#/$defs/') ? e.$ref.slice('#/$defs/'.length) : undefined
+      const destino = nombre ? defs[nombre] : undefined
+      if (!nombre || !destino || visitando.has(nombre)) return e
+      const { $ref: _, ...resto } = e
+      return resolver({ ...destino, ...resto }, new Set([...visitando, nombre]))
+    }
+    const out: Esquema = { ...e }
+    if (e.properties) {
+      out.properties = Object.fromEntries(Object.entries(e.properties).map(([k, v]) => [k, resolver(v, visitando)]))
+    }
+    if (e.items) out.items = resolver(e.items, visitando)
+    return out
+  }
+
+  return resolver(raiz, new Set())
 }
 
 /**

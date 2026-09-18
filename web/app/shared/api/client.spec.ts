@@ -124,6 +124,22 @@ describe('las respuestas', () => {
     expect(cabecera(llamadas[0]!, 'Content-Type')).toBe('application/json')
   })
 
+  // Una subida de archivo. Serializarla como JSON manda "{}", y poner
+  // Content-Type a mano pierde el boundary que el navegador escribe solo: en los
+  // dos casos el servidor no encuentra el campo `file`.
+  it('un FormData viaja tal cual, sin Content-Type propio', async () => {
+    const { api, jar, llamadas } = servidorFalso(() => json({ id: 'm1' }, 201))
+    jar.cookies = 'XSRF-TOKEN=abc'
+    const form = new FormData()
+    form.append('file', new Blob(['png'], { type: 'image/png' }), 'logo.png')
+
+    await api.post('/media', form)
+
+    expect(llamadas[0]!.init.body).toBe(form)
+    expect(cabecera(llamadas[0]!, 'Content-Type')).toBeUndefined()
+    expect(cabecera(llamadas[0]!, CABECERA_CSRF)).toBe('abc')
+  })
+
   it('todo fallo sale como ApiError, con el code del servidor', async () => {
     const { api } = servidorFalso(() =>
       new Response(JSON.stringify({ status: 401, code: 'UNAUTHENTICATED', traceId: 't-9' }), {

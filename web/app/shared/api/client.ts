@@ -170,14 +170,18 @@ export function crearCliente({ base, fetch: pedir, cookies, candado = sinCandado
       // mismo 403 y ademas mentiria en el log.
       if (token) cabeceras[CABECERA_CSRF] = token
     }
-    if (cuerpo !== undefined) cabeceras['Content-Type'] = 'application/json'
+    // Un FormData —una subida de archivo— viaja tal cual y sin Content-Type:
+    // lo escribe el navegador con el boundary del multipart. Ponerlo a mano lo
+    // pierde, y el servidor no encuentra el campo.
+    const esFormulario = cuerpo instanceof FormData
+    if (cuerpo !== undefined && !esFormulario) cabeceras['Content-Type'] = 'application/json'
 
     let res: Response
     try {
       res = await pedir(base + ruta, {
         method: metodo,
         headers: cabeceras,
-        body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
+        body: cuerpo === undefined ? undefined : esFormulario ? cuerpo : JSON.stringify(cuerpo),
         // Mismo origen: las cookies viajan solas. Nunca 'include', que las
         // mandaria tambien a otro origen si alguien cambia la base.
         credentials: 'same-origin',
