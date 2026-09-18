@@ -40,21 +40,27 @@ const abierto = defineModel<boolean>('open', { default: false })
     <ToastRoot
       v-model:open="abierto"
       :duration="duration"
-      class="aviso"
-      :class="`v-${variant}`"
+      class="base-toast"
+      :class="`base-toast-${variant}`"
     >
-      <ToastTitle class="titulo">{{ title }}</ToastTitle>
-      <ToastDescription v-if="description" class="descripcion">
+      <ToastTitle class="base-toast-titulo">{{ title }}</ToastTitle>
+      <ToastDescription v-if="description" class="base-toast-descripcion">
         {{ description }}
       </ToastDescription>
-      <ToastClose class="cerrar" aria-label="Cerrar aviso">×</ToastClose>
+      <ToastClose class="base-toast-cerrar" aria-label="Cerrar aviso">×</ToastClose>
     </ToastRoot>
-    <ToastViewport class="region" label="Avisos ({hotkey})" />
+    <ToastViewport class="base-toast-region" label="Avisos ({hotkey})" />
   </ToastProvider>
 </template>
 
-<style scoped>
-.region {
+<style>
+/* Sin scoped a proposito. Reka no pone el atributo de los estilos scoped donde
+   caen las clases: ToastViewport envuelve su <ol> en un <div role="region"> y el
+   atributo cae en el <div>, y ToastRoot se pinta dentro de ese <ol>, lejos del
+   arbol de este componente. Con scoped ninguna regla casaba: el aviso salia
+   como una lista numerada sin tarjeta al pie de la pagina, no flotando. Los
+   nombres llevan el prefijo base-toast para no chocar con otra clase global. */
+.base-toast-region {
   position: fixed;
   right: var(--space-4);
   bottom: var(--space-4);
@@ -67,7 +73,7 @@ const abierto = defineModel<boolean>('open', { default: false })
   list-style: none;
 }
 
-.aviso {
+.base-toast {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: var(--space-1) var(--space-3);
@@ -79,27 +85,27 @@ const abierto = defineModel<boolean>('open', { default: false })
   border-radius: var(--radius-md);
 }
 
-.v-ok {
+.base-toast-ok {
   border-left-color: var(--color-ok);
 }
-.v-danger {
+.base-toast-danger {
   border-left-color: var(--color-danger);
 }
 
-.titulo {
+.base-toast-titulo {
   margin: 0;
   font-size: var(--text-base);
   font-weight: 600;
 }
 
-.descripcion {
+.base-toast-descripcion {
   grid-column: 1;
   margin: 0;
   color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
 
-.cerrar {
+.base-toast-cerrar {
   grid-row: 1;
   grid-column: 2;
   align-self: start;
@@ -113,11 +119,11 @@ const abierto = defineModel<boolean>('open', { default: false })
   cursor: pointer;
 }
 
-.cerrar:hover {
+.base-toast-cerrar:hover {
   color: var(--color-text);
 }
 
-.cerrar:focus-visible {
+.base-toast-cerrar:focus-visible {
   outline: var(--focus-ring) solid var(--color-accent-strong);
   outline-offset: var(--focus-ring);
 }

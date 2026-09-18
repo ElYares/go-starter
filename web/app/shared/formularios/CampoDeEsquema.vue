@@ -11,8 +11,9 @@
 // lo tiene.
 import { computed } from 'vue'
 import { BaseButton, BaseField, BaseInput, BaseTextarea } from '~/shared/ui'
-import type { Esquema } from '~/shared/blocks/catalogo'
-import { mover, valorInicial } from '../editor'
+import type { Schemas } from '~/shared/api/generated'
+import CampoDeMedio from './CampoDeMedio.vue'
+import { FORMATO_MEDIO, mover, valorInicial, type Esquema } from './esquema'
 
 defineOptions({ name: 'CampoDeEsquema' })
 
@@ -26,6 +27,11 @@ const props = withDefaults(
     deshabilitado?: boolean
     /** La raiz de las props de un bloque: sus campos van sin recuadro propio. */
     raiz?: boolean
+    /**
+     * Sube una imagen para los campos `format: media-id`. Sin ella, esos campos
+     * muestran la imagen y no se pueden cambiar.
+     */
+    subirMedio?: (archivo: File) => Promise<Schemas['Medio']>
   }>(),
   { requerido: false, deshabilitado: false, raiz: false },
 )
@@ -86,8 +92,21 @@ const etiquetaDeElemento = (i: number) => `${props.esquema.items?.title ?? 'Elem
 </script>
 
 <template>
+  <CampoDeMedio
+    v-if="esquema.type === 'string' && esquema.format === FORMATO_MEDIO"
+    :model-value="typeof valor === 'string' ? valor : undefined"
+    @update:model-value="valor = $event"
+    :etiqueta="etiqueta"
+    :ruta="ruta"
+    :descripcion="esquema.description"
+    :error="error"
+    :requerido="requerido"
+    :deshabilitado="deshabilitado"
+    :subir="subirMedio"
+  />
+
   <BaseField
-    v-if="esquema.type === 'string'"
+    v-else-if="esquema.type === 'string'"
     :label="etiqueta"
     :hint="esquema.description"
     :error="error"
@@ -125,6 +144,7 @@ const etiquetaDeElemento = (i: number) => `${props.esquema.items?.title ?? 'Elem
       :errores="errores"
       :requerido="esquema.required?.includes(String(clave))"
       :deshabilitado="deshabilitado"
+      :subir-medio="subirMedio"
       :model-value="objeto?.[clave]"
       @update:model-value="asignar(String(clave), $event)"
     />
@@ -146,6 +166,7 @@ const etiquetaDeElemento = (i: number) => `${props.esquema.items?.title ?? 'Elem
           :errores="errores"
           :requerido="esquema.required?.includes(String(clave))"
           :deshabilitado="deshabilitado"
+          :subir-medio="subirMedio"
           :model-value="objeto?.[clave]"
           @update:model-value="asignar(String(clave), $event)"
         />
@@ -211,6 +232,7 @@ const etiquetaDeElemento = (i: number) => `${props.esquema.items?.title ?? 'Elem
           :errores="errores"
           requerido
           :deshabilitado="deshabilitado"
+          :subir-medio="subirMedio"
           :model-value="elemento"
           @update:model-value="cambiarElemento(i, $event)"
         />

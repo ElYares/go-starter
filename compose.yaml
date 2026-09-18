@@ -106,6 +106,9 @@ services:
       # archivo suelto, asi que un `git stash` no la deja apuntando al inodo
       # viejo como pasa con openapi.yaml.
       - ./api/internal/modules/content/bloques:/api/internal/modules/content/bloques:ro
+      # Los esquemas de las claves de settings, igual: de ellos sale el
+      # formulario de /admin/configuracion/{clave}.
+      - ./api/internal/modules/settings/esquemas:/api/internal/modules/settings/esquemas:ro
       # Tapa el node_modules del bind mount: los binarios nativos que instala el
       # host (glibc) no corren en la imagen alpine, y al reves igual.
       - web_node_modules:/workspace/node_modules

@@ -11,20 +11,9 @@
  * web, que monta esa carpeta en `/api/...` (compose.yaml).
  */
 
-/** Lo que el editor entiende de un JSON Schema. Lo demas se ignora. */
-export interface Esquema {
-  title?: string
-  description?: string
-  type?: string
-  properties?: Record<string, Esquema>
-  required?: string[]
-  items?: Esquema
-  minLength?: number
-  maxLength?: number
-  minItems?: number
-  maxItems?: number
-  pattern?: string
-}
+import type { Esquema } from '~/shared/formularios/esquema'
+
+export type { Esquema }
 
 const archivos = import.meta.glob<Esquema>('../../../../api/internal/modules/content/bloques/*.json', {
   eager: true,

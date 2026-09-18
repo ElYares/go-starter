@@ -27,16 +27,15 @@ import {
 } from '~/shared/ui'
 import { ApiError } from '~/shared/api/errors'
 import type { Schemas } from '~/shared/api/generated'
-import { esquemas as esquemasDelCatalogo, type Esquema } from '~/shared/blocks/catalogo'
+import { esquemas as esquemasDelCatalogo } from '~/shared/blocks/catalogo'
+import { erroresPorCampo, mover, type Esquema } from '~/shared/formularios/esquema'
 import { bloques as registro } from '~/shared/blocks/registry'
 import RenderDeBloques from '~/shared/blocks/RenderDeBloques.vue'
 import {
   borradorDe,
   cuerpoDeGuardado,
-  erroresPorCampo,
   estadoDePublicacion,
   hayCambios,
-  mover,
   nuevoBloque,
   type Bloque,
   type Borrador,

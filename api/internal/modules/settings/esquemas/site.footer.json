@@ -21,6 +21,7 @@
   },
   "$defs": {
     "enlace": {
+      "title": "Enlace",
       "type": "object",
       "additionalProperties": false,
       "required": [

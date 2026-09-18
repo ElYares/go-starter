@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '~/shared/api/errors'
 import type { Schemas } from '~/shared/api/generated'
@@ -12,7 +12,11 @@ afterEach(() => {
 })
 
 function montar(cargar: () => Promise<Schemas['SettingsPage']>) {
-  const w = mount(ListaDeSettings, { props: { cargar }, attachTo: document.body })
+  const w = mount(ListaDeSettings, {
+    props: { cargar },
+    attachTo: document.body,
+    global: { stubs: { RouterLink: RouterLinkStub } },
+  })
   montados.push(w)
   return w
 }
@@ -153,5 +157,21 @@ describe('ListaDeSettings', () => {
 
     expect(errores[0]).toBeInstanceOf(RangeError)
     expect(estadoDe(w)).not.toBe('error')
+  })
+})
+
+describe('la lista enlaza cada clave a su editor', () => {
+  it('con la ruta /admin/configuracion/{clave}', async () => {
+    const w = montar(() =>
+      Promise.resolve({
+        content: [setting('site.brand'), setting('site.nav')],
+        page: { number: 0, size: 100, totalElements: 2, totalPages: 1 },
+      }),
+    )
+    await flushPromises()
+    expect(w.findAllComponents(RouterLinkStub).map((l) => l.props('to'))).toEqual([
+      '/admin/configuracion/site.brand',
+      '/admin/configuracion/site.nav',
+    ])
   })
 })

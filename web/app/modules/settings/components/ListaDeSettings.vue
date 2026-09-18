@@ -3,6 +3,7 @@
 // "sin permiso". Sin nada de Nuxt: recibe `cargar` y no sabe de donde salen los
 // datos, asi se prueba cada estado con una promesa a mano.
 import { computed, onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { BaseBadge, BaseButton, BaseEmptyState, BaseTable, type ColumnaTabla } from '~/shared/ui'
 import { ApiError } from '~/shared/api/errors'
 import type { Schemas } from '~/shared/api/generated'
@@ -90,6 +91,10 @@ function resumir(valor: unknown): string {
 
     <div v-else data-estado="listo">
       <BaseTable :columns="columnas" :rows="filas" row-key="key" caption="Claves de configuracion del sitio">
+        <!-- Cada clave abre su editor (CU-006). -->
+        <template #celda-key="{ valor }">
+          <RouterLink :to="`/admin/configuracion/${valor}`" class="enlace">{{ valor }}</RouterLink>
+        </template>
         <template #celda-value="{ valor }">
           <code>{{ resumir(valor) }}</code>
         </template>
@@ -136,6 +141,11 @@ h1 {
   text-align: center;
   font-size: var(--text-sm);
   color: var(--color-text-muted);
+}
+.enlace {
+  color: var(--color-accent-strong);
+  font-family: var(--font-mono);
+  font-weight: 600;
 }
 code {
   font-family: var(--font-mono);
