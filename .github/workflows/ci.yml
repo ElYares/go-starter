@@ -108,6 +108,14 @@ jobs:
         # real, no un "ok (cached)".
         run: go test -count=1 ./...
 
+      # El renombre de un fork (HU-014): corre scripts/rename.sh sobre una copia
+      # del checkout y comprueba que no quede el nombre del starter fuera de
+      # docs/, que rechace nombres invalidos sin tocar nada y que la segunda vez
+      # no haga nada. No toca el checkout del CI.
+      - name: Renombre de un fork
+        working-directory: .
+        run: ./scripts/rename.test.sh
+
   web:
     name: web (nuxt)
     runs-on: ubuntu-latest
