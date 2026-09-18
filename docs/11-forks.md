@@ -22,13 +22,32 @@ fork que arrastra parches de plataforma no va a poder volver a traer mejoras.
 ## Nacer
 
 ```sh
-gh repo create mi-proyecto --template ElYares/go-starter --private
-cd mi-proyecto
-./scripts/rename.sh mi-proyecto        # módulo Go, compose, dominio local, títulos
-cp .env.example .env                   # y llenar los secretos, que no tienen default
+gh repo create mi-tienda --template ElYares/go-starter --private --clone
+cd mi-tienda
+./scripts/rename.sh mi-tienda github.com/acme/mi-tienda   # y commitear el resultado
+cp .env.example .env
+# JWT_SIGNING_KEY no tiene default: openssl rand -base64 48
 devherd up && devherd proxy apply
-go run ./cmd/seed                      # admin de desarrollo
+./scripts/seed.sh                      # migraciones, permisos y el superadmin
 ```
+
+Lo que hace cada paso que no se ve:
+
+- **`--template` exige que `ElYares/go-starter` esté marcado como template** en
+  la configuración del repo en GitHub. Sin eso, `gh` falla. El fork nace sin la
+  historia del starter; para traer mejoras después, ver abajo
+- **`rename.sh`** cambia el nombre del starter en todo el proyecto salvo
+  `docs/`: el módulo Go (`<modulo>/api`), el dominio local (`<nombre>.localhost`),
+  la cuenta de desarrollo (`superadmin@<nombre>.localhost`), los títulos, la marca
+  sembrada y el paquete de web. Pide el árbol limpio, para que `git diff` muestre
+  exactamente lo que hizo; correrlo dos veces no hace nada. Sus casos se prueban
+  con `./scripts/rename.test.sh`
+- **`devherd proxy apply` pide `sudo`.** Sin él, `<nombre>.localhost` lo contesta
+  el proxy compartido con un `200` vacío: parece que funciona y no llega al
+  stack
+- **`seed.sh`** encuentra el contenedor del api de este checkout por las
+  etiquetas de compose. Entra en `/admin` con `superadmin@<nombre>.localhost` y
+  `superadmin-de-desarrollo`, que solo autentican en desarrollo
 
 Antes de escribir nada propio: cambiar los tokens y ver la landing con la marca
 del proyecto. Es diez minutos y evita construir tres semanas sobre una identidad

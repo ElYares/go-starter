@@ -104,8 +104,11 @@ docker exec -w /workspace <contenedor-api> go run ./cmd/migrate
 ## El superadmin de desarrollo
 
 ```sh
-docker exec -w /workspace <contenedor-api> go run ./cmd/seed
+./scripts/seed.sh    # = docker exec -w /workspace <contenedor-api> go run ./cmd/seed
 ```
+
+`seed.sh` encuentra el contenedor del api de este checkout por las etiquetas de
+compose, así que no hace falta saber el nombre que le puso devherd.
 
 Migra, siembra los permisos y crea la cuenta con la que se entra a `/admin`:
 `superadmin@go-starter.localhost` / `superadmin-de-desarrollo`, o lo que digan
