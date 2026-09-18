@@ -176,17 +176,24 @@ sequenceDiagram
     participant S as storage.Store
     participant D as Postgres
 
-    A->>G: POST /api/v1/media (multipart)
-    G->>G: calcular SHA-256 mientras se lee (streaming, sin cargar en RAM)
-    G->>G: deducir el MIME de los BYTES, no del nombre ni del Content-Type
-    alt tipo no permitido o excede el límite
-        G-->>A: 400 / 413
-    else sha256 ya existe
+    A->>G: POST /api/v1/media (multipart, campo file)
+    G->>G: leer 512 bytes y deducir el MIME de ellos
+    alt no es PNG, JPEG ni WebP
+        G-->>A: 400 (no se escribió nada)
+    end
+    G->>S: Stage: copiar a lo provisional, con SHA-256 y tope de 5 MB mientras llega
+    alt pasa de 5 MB
+        S-->>G: se corta la copia y se borra lo provisional
+        G-->>A: 413
+    end
+    G->>G: DecodeConfig sobre lo provisional (ancho, alto, formato real)
+    alt el sha256 ya existe
+        G->>S: Discard
         G-->>A: 200 con el registro existente (no duplica)
     else nuevo
-        G->>S: guardar bytes
-        G->>D: insert media
-        G-->>A: 201 + Location
+        G->>S: Commit bajo la llave del hash (rename atómico)
+        G->>D: insert ... on conflict (sha256) do nothing
+        G-->>A: 201 + Location (o 200 si otra subida ganó la carrera)
     end
 ```
 
@@ -194,8 +201,14 @@ sequenceDiagram
   del cliente es cómo un `.php` termina llamándose `.jpg`
 - **Streaming, no `io.ReadAll`.** Un archivo de 200 MB en memoria son 200 MB de
   memoria, multiplicados por peticiones concurrentes
-- **El límite se aplica mientras se lee** (`http.MaxBytesReader`), no después.
-  Comprobarlo al final significa haber aceptado ya todo el cuerpo
+- **El límite se aplica mientras se lee** (`http.MaxBytesReader` sobre el
+  cuerpo, y un tope exacto de 5 MB sobre el archivo), no después. Comprobarlo al
+  final significa haber aceptado ya todo el cuerpo
+- **Nada tiene nombre hasta que todo cuadra.** Lo provisional vive en
+  `STORAGE_PATH/.tmp` —dentro de la raíz, porque `rename` solo es atómico en el
+  mismo sistema de archivos— y un corte a mitad no deja medio archivo con llave
+- **Los bytes públicos salen con `nosniff`**, `Content-Security-Policy:
+  sandbox` y cache `immutable`: un id son siempre los mismos bytes
 - El `413` de una subida grande a veces llega al cliente como un error de red y
   no como un código: el servidor tendría que tragarse el resto del cuerpo para
   poder contestar, y por encima de cierto tamaño corta la conexión
