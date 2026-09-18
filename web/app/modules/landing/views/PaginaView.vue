@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { RenderDeBloques } from '~/shared/blocks'
+import MarcoDelSitio from '../components/MarcoDelSitio.vue'
 import { usePaginaPublica } from '../composables/usePaginaPublica'
 import { metaDePagina, SLUG_DE_PORTADA, slugDeRuta } from '../pagina'
 
@@ -25,9 +26,11 @@ useSeoMeta(metaDePagina(pagina.value, useRequestURL().href))
 </script>
 
 <template>
-  <main class="landing">
-    <RenderDeBloques :bloques="pagina.blocks" />
-  </main>
+  <MarcoDelSitio>
+    <main class="landing">
+      <RenderDeBloques :bloques="pagina.blocks" />
+    </main>
+  </MarcoDelSitio>
 </template>
 
 <style scoped>

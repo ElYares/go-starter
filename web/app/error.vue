@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { NuxtError } from '#app'
 import { BaseButton, BaseEmptyState } from '~/shared/ui'
+import MarcoDelSitio from '~/modules/landing/components/MarcoDelSitio.vue'
 
 // La pantalla de error de toda la app. Cumple el estado "error" de
 // docs/07-frontend.md: dice que paso, deja reintentar y ensena el traceId, que
@@ -9,6 +10,7 @@ import { BaseButton, BaseEmptyState } from '~/shared/ui'
 const props = defineProps<{ error: NuxtError<{ traceId?: string; destino?: string; landing?: boolean }> }>()
 
 const noExiste = computed(() => props.error.statusCode === 404)
+const conMarco = computed(() => !!props.error.data?.landing && props.error.statusCode !== 503)
 
 useHead({ title: () => (noExiste.value ? 'Pagina no encontrada · go-starter' : 'Algo fallo · go-starter') })
 const traceId = computed(() => props.error.data?.traceId)
@@ -39,31 +41,37 @@ function reintentar() {
 </script>
 
 <template>
-  <main class="pantalla">
-    <BaseEmptyState
-      v-if="noExiste"
-      title="Esta pagina no existe"
-      description="Puede que el enlace este mal escrito o que la pagina se haya quitado."
-    >
-      <template #accion>
-        <BaseButton @click="clearError({ redirect: '/' })">Ir al inicio</BaseButton>
-      </template>
-    </BaseEmptyState>
+  <!-- Un error de la landing lleva el marco del sitio: quien llega a un 404
+       tiene por donde volver. Uno del dashboard no: su marco es el del admin.
+       Un 503 tampoco: el api no responde, pedirle la configuracion es esperar
+       otro timeout para nada (con el api apagado, 7 s mas por visita). -->
+  <component :is="conMarco ? MarcoDelSitio : 'div'">
+    <main class="pantalla">
+      <BaseEmptyState
+        v-if="noExiste"
+        title="Esta pagina no existe"
+        description="Puede que el enlace este mal escrito o que la pagina se haya quitado."
+      >
+        <template #accion>
+          <BaseButton @click="clearError({ redirect: '/' })">Ir al inicio</BaseButton>
+        </template>
+      </BaseEmptyState>
 
-    <BaseEmptyState
-      v-else
-      :title="error.statusMessage || 'Algo fallo'"
-      :description="descripcion"
-    >
-      <template #accion>
-        <BaseButton @click="reintentar">Reintentar</BaseButton>
-      </template>
-    </BaseEmptyState>
+      <BaseEmptyState
+        v-else
+        :title="error.statusMessage || 'Algo fallo'"
+        :description="descripcion"
+      >
+        <template #accion>
+          <BaseButton @click="reintentar">Reintentar</BaseButton>
+        </template>
+      </BaseEmptyState>
 
-    <p v-if="traceId" class="referencia">
-      Referencia: <code>{{ traceId }}</code>
-    </p>
-  </main>
+      <p v-if="traceId" class="referencia">
+        Referencia: <code>{{ traceId }}</code>
+      </p>
+    </main>
+  </component>
 </template>
 
 <style scoped>
