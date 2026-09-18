@@ -40,7 +40,7 @@ async function esperarAnunciador(): Promise<Element> {
 }
 
 describe('BaseToast', () => {
-  const aviso = () => document.querySelector('.aviso')
+  const aviso = () => document.querySelector('.base-toast')
 
   it('cerrado no pinta el aviso', async () => {
     montar({ open: false })
@@ -96,6 +96,6 @@ describe('BaseToast', () => {
   it('la variante cambia la clase, no el marcado', async () => {
     montar({ variant: 'danger' })
     await asentar()
-    expect([...aviso()!.classList]).toContain('v-danger')
+    expect([...aviso()!.classList]).toContain('base-toast-danger')
   })
 })
