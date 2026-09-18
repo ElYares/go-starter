@@ -163,7 +163,10 @@ vive en `modules/content/`: la lógica sin Vue en `editor.ts`, las llamadas en
 `ListaDeSettings`.
 
 **Los formularios salen del JSON Schema del catálogo** (`CampoDeEsquema.vue`,
-recursivo). Entiende lo que usa el catálogo del starter:
+recursivo). Vive en `shared/formularios/` porque lo usan dos módulos —el editor
+de páginas y la configuración del sitio—, junto con sus funciones puras
+(`esquema.ts`: `valorInicial`, `mover`, `erroresPorCampo`). Entiende lo que usan
+los esquemas del starter:
 
 | En el esquema | En el editor |
 |---|---|
@@ -171,6 +174,8 @@ recursivo). Entiende lo que usa el catálogo del starter:
 | `object` requerido | sus campos |
 | `object` opcional | "Agregar …" / "Quitar …" |
 | `array` | un grupo por elemento, con subir, bajar y quitar; respeta `minItems` y `maxItems` |
+| `string` con `format: media-id` | un campo de imagen: vista previa, subir y quitar (`CampoDeMedio.vue`) |
+| `$ref` a `#/$defs/…` | lo que nombra; se resuelve al cargar (`resolverReferencias`) |
 | otra cosa | su JSON, sin editar, y se conserva al guardar |
 
 Un opcional vaciado se **quita** del objeto: "sin bajada" no es `subtitle: ""`.
@@ -195,6 +200,28 @@ Reglas del editor que no se ven en el marcado:
 - **La copia del borrador es por JSON, no `structuredClone`**: la página llega
   en un proxy reactivo y `structuredClone` lanza `DataCloneError` con él. El
   editor se quedaba en "cargando" sin un error visible
+
+## La configuración del sitio
+
+`/admin/configuracion` lista las claves y `/admin/configuracion/{clave}` edita una
+(CU-006). El formulario sale del esquema de la clave
+(`api/internal/modules/settings/esquemas/`), importado en el build como el
+catálogo de bloques (`modules/settings/esquemas.ts`), y el compose monta esa
+carpeta en web. El 400 por campo, el 409 y el aviso de salir con cambios son los
+del editor de páginas.
+
+- **El guardado no manda `isPublic`**: ausente conserva la visibilidad
+  (Decision 025). Esta pantalla no la cambia
+- **Una imagen se sube al elegirla**, y solo entonces cambia el valor: si la
+  subida falla, el campo conserva la anterior. Subida y no guardada queda como
+  medio huérfano (Decision 024). Más de 5 MB se rechaza antes de mandar nada:
+  por encima de cierto tamaño el `413` llega como error de red
+- **El cliente manda un `FormData` tal cual**, sin `Content-Type`: lo escribe el
+  navegador con el boundary. Serializarlo manda `"{}"`
+- **Sin guardar no hay guardado, ni con Enter**: guardar lo mismo sube la
+  versión y le da un `409` a quien sí estaba editando
+- **Una clave sin esquema en el navegador** —la agregó un fork en el api y web
+  no la trae— se muestra como JSON y no se edita
 
 ## La landing
 
