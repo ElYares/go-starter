@@ -249,6 +249,25 @@ Tres trampas:
 - **La clave de página es la ruta completa** (`definePageMeta({ key })`): sin
   ella, pasar de `/precios` a `/nosotros` reutiliza la vista con los datos viejos
 
+### El marco: cabecera y pie
+
+Toda página de la landing va dentro de `MarcoDelSitio.vue`, que pide
+`GET /public/settings` y pinta la marca (logo o nombre), el menú (`site.nav`) y
+el pie (`site.footer`) en SSR. La lógica pura es `modules/landing/sitio.ts`.
+
+- **Si la configuración no llega, la página se sirve igual, sin cabecera ni
+  pie**, con `200` y el fallo en el log de web (`[landing] no llego la
+  configuracion del sitio`). El marco es secundario: un fallo suyo no tumba el
+  contenido con un `503`
+- **Los 404 y 500 de la landing también llevan el marco** (`error.vue`), para
+  que haya por dónde volver. **Un 503 no**: el api no responde, y pedirle la
+  configuración es esperar otro timeout —con el api apagado, 7 s más por visita
+- **Los enlaces se releen a la defensiva** (`sitioDe`): solo `/ruta` o
+  `https://`. El api ya los valida, pero una fila escrita a mano no pasa por el
+  esquema, y lo que sale de aquí es un `href` en todas las páginas
+- **El logo lleva el nombre en `alt`**: es lo que se lee y lo que se ve si la
+  imagen no carga
+
 ## La capa de API
 
 Un cliente, dos comportamientos según dónde corre:
