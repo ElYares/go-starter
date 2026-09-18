@@ -1,14 +1,15 @@
 # _template
 
-Molde para copiar al crear un modulo nuevo:
+Molde de un modulo nuevo. No se copia a mano: desde la raiz del repo,
 
 ```sh
-cp -r internal/modules/_template internal/modules/pedidos
+./scripts/nuevo-modulo.sh pedidos
 ```
 
-Despues: renombrar el paquete, ajustar `Name()`, `Permissions()` y `Routes()`,
-escribir la primera migracion, y agregarlo a `internal/app/modules.go` **despues
-de sus dependencias** — ese orden es el orden en que corren las migraciones.
+lo copia, renombra el paquete, `Name()`, los permisos, la tabla y la ruta, y lo
+registra en `internal/app/modules.go` (al final, antes de `// catalog.New`: si
+depende de otro que se registra despues, muevelo — el orden del registro es el
+orden de las migraciones). `./scripts/quitar-modulo.sh pedidos` lo deshace.
 
 Y el contrato, que va primero: declarar las operaciones en `api/openapi.yaml`
 **con el tag del modulo**, copiar `openapi.cfg.yaml` de `settings/` cambiando

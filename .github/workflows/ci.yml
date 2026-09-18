@@ -1,5 +1,5 @@
-# Tres trabajos en paralelo. Ninguno depende de otro: si el frontend esta roto,
-# igual quieres saber si el backend lo esta.
+# Cuatro trabajos en paralelo. Ninguno depende de otro: si el frontend esta
+# roto, igual quieres saber si el backend lo esta.
 #
 # Las versiones de las acciones son las ultimas al 2026-09-02, consultadas con
 # 'gh api repos/<accion>/releases/latest'. Subir de a un major "por prudencia"
@@ -108,14 +108,6 @@ jobs:
         # real, no un "ok (cached)".
         run: go test -count=1 ./...
 
-      # El renombre de un fork (HU-014): corre scripts/rename.sh sobre una copia
-      # del checkout y comprueba que no quede el nombre del starter fuera de
-      # docs/, que rechace nombres invalidos sin tocar nada y que la segunda vez
-      # no haga nada. No toca el checkout del CI.
-      - name: Renombre de un fork
-        working-directory: .
-        run: ./scripts/rename.test.sh
-
   web:
     name: web (nuxt)
     runs-on: ubuntu-latest
@@ -158,6 +150,94 @@ jobs:
       # de las rutas, que las pruebas no ejercitan.
       - name: Build
         run: npm run build
+
+  # Las recetas de docs/11-forks.md, recorridas en cada PR (HU-015). La promesa
+  # del starter es que un modulo es una carpeta y una linea del registro: aqui
+  # se agrega uno desde _template, se comprueba que compila, migra y pasa las
+  # pruebas, y se quita otra vez. Si alguien hace que un modulo importe otro,
+  # o el molde se pudre, falla aqui y no el dia que un fork lo necesita.
+  fork:
+    name: fork (recetas)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+
+    services:
+      db:
+        image: postgres:17
+        env:
+          POSTGRES_DB: starter
+          POSTGRES_USER: starter
+          POSTGRES_PASSWORD: cambiame
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U starter -d starter"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://starter:cambiame@localhost:5432/starter?sslmode=disable
+      JWT_SIGNING_KEY: solo-para-ci-no-es-un-secreto
+      STORAGE_PATH: .storage
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
+
+      # Los scripts, sobre copias del checkout: casos de error, que no toquen de
+      # mas, y que crear y quitar deje el arbol como estaba.
+      - name: Renombre de un fork
+        working-directory: .
+        run: ./scripts/rename.test.sh
+      - name: Scripts de modulos
+        working-directory: .
+        run: ./scripts/nuevo-modulo.test.sh
+
+      # Y la receta de verdad, sobre este checkout.
+      - name: Agregar un modulo desde _template
+        working-directory: .
+        run: ./scripts/nuevo-modulo.sh pedidos
+
+      - name: Formato, build y vet con el modulo
+        run: |
+          sin_formato=$(gofmt -l .)
+          if [ -n "$sin_formato" ]; then
+            echo "Archivos sin formatear:"; echo "$sin_formato"; exit 1
+          fi
+          go build ./...
+          go vet ./...
+
+      - name: Sus migraciones y sus permisos
+        run: |
+          go run ./cmd/migrate
+          tabla=$(psql "$DATABASE_URL" -tAc "select to_regclass('pedidos_cosas')")
+          permisos=$(psql "$DATABASE_URL" -tAc "select count(*) from permissions where key like 'pedidos.%'")
+          echo "tabla=$tabla permisos=$permisos"
+          [ "$tabla" = "pedidos_cosas" ] && [ "$permisos" = "2" ]
+
+      - name: Pruebas con el modulo
+        run: go test -count=1 ./...
+
+      - name: Quitar el modulo
+        working-directory: .
+        run: |
+          ./scripts/quitar-modulo.sh pedidos
+          # Quitar deja el checkout como estaba: nada del modulo quedo fuera de
+          # lo que el script sabe deshacer.
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
+
+      - name: Build, vet y pruebas sin el modulo
+        run: |
+          go build ./...
+          go vet ./...
+          go test -count=1 ./...
 
   contract:
     name: contract (openapi)
