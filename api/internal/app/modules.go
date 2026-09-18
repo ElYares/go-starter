@@ -53,11 +53,20 @@ func Modules(cfg config.Config, pool *pgxpool.Pool) ([]Module, error) {
 		return nil, err
 	}
 
+	// media se arma antes que settings porque settings le pregunta si una
+	// imagen existe (settings.Medios). El orden de ARMADO no es el del registro:
+	// el de abajo sigue siendo el de las migraciones.
+	medios := media.New(pool, archivos)
+	ajustes, err := settings.New(pool, medios)
+	if err != nil {
+		return nil, err
+	}
+
 	return []Module{
 		// primero: los demas dependen de el
 		identity.New(pool, cfg.IsDev(), firmante, auth.NewIntentos(), auth.NewEmisor(cfg.CookieSecure)),
-		settings.New(pool),
-		media.New(pool, archivos),
+		ajustes,
+		medios,
 		// despues de media: lo usara por interfaz (ports.go), nunca por import
 		contenido,
 		// catalog.New(...),    // <- un fork agrega su dominio aqui

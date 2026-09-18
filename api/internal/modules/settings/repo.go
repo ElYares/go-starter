@@ -154,14 +154,14 @@ func (r *Repo) crear(ctx context.Context, s Setting) (Setting, error) {
 // lo que hace la comprobacion atomica: leer la version, decidir en Go y
 // escribir despues deja una ventana en la que otro guarda entre medias, que es
 // exactamente el bug que el `version` existe para cerrar.
-func (r *Repo) actualizar(ctx context.Context, s Setting) (Setting, error) {
+func (r *Repo) actualizar(ctx context.Context, s Setting, publica *bool) (Setting, error) {
 	sello, err := audit.ForUpdate(ctx)
 	if err != nil {
 		return Setting{}, err
 	}
 
 	q := fmt.Sprintf(`update settings
-		       set value = $1, is_public = $2, version = version + 1, %s
+		       set value = $1, is_public = coalesce($2, is_public), version = version + 1, %s
 		     where key = $3 and version = $4
 		  returning %s`,
 		sello.Assignments(5), columnas)
@@ -171,7 +171,8 @@ func (r *Repo) actualizar(ctx context.Context, s Setting) (Setting, error) {
 		return Setting{}, err
 	}
 
-	args := append([]any{crudo, s.IsPublic, s.Key, s.Version}, sello.Values...)
+	// publica nil conserva la visibilidad: el coalesce la deja como estaba.
+	args := append([]any{crudo, publica, s.Key, s.Version}, sello.Values...)
 
 	rows, err := r.pool.Query(ctx, q, args...)
 	if err != nil {

@@ -1,8 +1,15 @@
 package settings
 
 import (
+	"embed"
+	"fmt"
 	"regexp"
+	"slices"
+	"strings"
 
+	"github.com/google/uuid"
+
+	"github.com/elyares/go-starter/api/internal/platform/esquema"
 	"github.com/elyares/go-starter/api/internal/platform/httpx"
 )
 
@@ -36,6 +43,47 @@ func validarClave(k string) *httpx.Problem {
 		})
 	}
 	return nil
+}
+
+// Cada clave tiene su JSON Schema, y el nombre del archivo es la clave. Una
+// clave sin esquema no se acepta (Decision 024): la landing lee claves por
+// nombre y tiene que poder confiar en su forma. Agregar una clave es agregar un
+// archivo aqui.
+//
+// Los esquemas llevan `title` en cada propiedad porque de ellos sale el
+// formulario del dashboard, como con los bloques (Decision 022).
+//
+//go:embed esquemas/*.json
+var esquemasFS embed.FS
+
+// formatoMedio marca un campo que guarda el id de una imagen subida. El
+// esquema exige que sea un uuid; que exista lo comprueba el service contra
+// media, porque un esquema no puede preguntarle nada a la base.
+const formatoMedio = "media-id"
+
+var medioID = esquema.Formato{Nombre: formatoMedio, Validar: func(s string) error {
+	_, err := uuid.Parse(s)
+	return err
+}}
+
+func cargarEsquemas() (map[string]*esquema.Esquema, error) {
+	es, err := esquema.Cargar(esquemasFS, "esquemas/*.json", medioID)
+	if err != nil {
+		return nil, fmt.Errorf("settings: %w", err)
+	}
+	return es, nil
+}
+
+func claveSinEsquema(k string, es map[string]*esquema.Esquema) *httpx.Problem {
+	claves := make([]string, 0, len(es))
+	for c := range es {
+		claves = append(claves, c)
+	}
+	slices.Sort(claves)
+	return httpx.BadRequest("La clave no esta declarada", httpx.FieldIssue{
+		Field: "key", Code: "unknown",
+		Message: fmt.Sprintf("No hay esquema para %q. Las que hay: %s", k, strings.Join(claves, ", ")),
+	})
 }
 
 // validarValor trata el JSON `null` como ausente. El contrato declara `value`

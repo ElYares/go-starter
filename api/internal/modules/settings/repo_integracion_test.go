@@ -131,7 +131,7 @@ func TestIntegracionLaModificacionConservaLaCreacion(t *testing.T) {
 	// Otra persona guarda encima.
 	actualizada, err := r.actualizar(conActor(otroID), Setting{
 		Key: key, Value: map[string]any{"a": 2}, IsPublic: true, Version: 1,
-	})
+	}, ptr(true))
 	if err != nil {
 		t.Fatalf("actualizar: %v", err)
 	}
@@ -162,12 +162,12 @@ func TestIntegracionUnaVersionViejaNoEscribe(t *testing.T) {
 	if _, err := r.crear(ctx, Setting{Key: key, Value: map[string]any{"a": 1}}); err != nil {
 		t.Fatalf("crear: %v", err)
 	}
-	if _, err := r.actualizar(ctx, Setting{Key: key, Value: map[string]any{"a": 2}, Version: 1}); err != nil {
+	if _, err := r.actualizar(ctx, Setting{Key: key, Value: map[string]any{"a": 2}, Version: 1}, nil); err != nil {
 		t.Fatalf("primer guardado: %v", err)
 	}
 
 	// Alguien que leyo la version 1 intenta guardar cuando ya va por la 2.
-	_, err := r.actualizar(ctx, Setting{Key: key, Value: map[string]any{"a": 99}, Version: 1})
+	_, err := r.actualizar(ctx, Setting{Key: key, Value: map[string]any{"a": 99}, Version: 1}, nil)
 	if !errors.Is(err, errVersion) {
 		t.Fatalf("err = %v, se esperaba errVersion", err)
 	}
@@ -190,7 +190,7 @@ func TestIntegracionDistingueNoExisteDeVersionEquivocada(t *testing.T) {
 
 	_, err := r.actualizar(ctx, Setting{
 		Key: "prueba.integracion.no.existe", Value: 1, Version: 1,
-	})
+	}, nil)
 	if !errors.Is(err, errNoExiste) {
 		t.Fatalf("err = %v, se esperaba errNoExiste; 404 y 409 llevan al usuario a cosas distintas", err)
 	}
@@ -296,3 +296,47 @@ func TestIntegracionElOrdenLoHaceLaBase(t *testing.T) {
 }
 
 func parsearQuery(s string) (url.Values, error) { return url.ParseQuery(s) }
+
+// El pie lo siembra la migracion 0002 y es publico: la landing lo lee por
+// /public/settings sin sesion.
+func TestIntegracionElPieEstaSembradoYEsPublico(t *testing.T) {
+	r := &Repo{pool: pool(t)}
+
+	publicas, err := r.listar(context.Background(), true)
+	if err != nil {
+		t.Fatalf("listar: %v", err)
+	}
+	for _, s := range publicas {
+		if s.Key == "site.footer" {
+			return
+		}
+	}
+	t.Error("site.footer no esta entre las claves publicas")
+}
+
+// Sin isPublic, el UPDATE conserva la visibilidad; con el, la cambia. Se prueba
+// contra la base porque la regla vive en el `coalesce` del SQL.
+func TestIntegracionSinIsPublicSeConservaLaVisibilidad(t *testing.T) {
+	r := &Repo{pool: pool(t)}
+	ctx := conActor(idDeJuan)
+	key := claveDePrueba(t, r)
+	if _, err := r.crear(ctx, Setting{Key: key, Value: map[string]any{"a": 1}, IsPublic: true}); err != nil {
+		t.Fatalf("crear: %v", err)
+	}
+
+	guardada, err := r.actualizar(ctx, Setting{Key: key, Value: map[string]any{"a": 2}, Version: 1}, nil)
+	if err != nil {
+		t.Fatalf("actualizar: %v", err)
+	}
+	if !guardada.IsPublic {
+		t.Fatal("un PUT sin isPublic dejo privada una clave publica")
+	}
+
+	guardada, err = r.actualizar(ctx, Setting{Key: key, Value: map[string]any{"a": 3}, Version: 2}, ptr(false))
+	if err != nil {
+		t.Fatalf("actualizar: %v", err)
+	}
+	if guardada.IsPublic {
+		t.Error("isPublic=false no cambio la visibilidad")
+	}
+}

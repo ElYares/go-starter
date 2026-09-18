@@ -39,6 +39,12 @@ tags:
     description: |
       Configuracion del sitio: marca, navegacion, pie, tema.
 
+      **Cada clave tiene su JSON Schema**, declarado en el codigo
+      (`api/internal/modules/settings/esquemas/<clave>.json`), y el valor se
+      valida contra el al guardar. Una clave sin esquema no se acepta: la
+      landing lee claves por nombre y tiene que poder confiar en su forma. Ver
+      la Decision 024.
+
       **No hay DELETE, y es deliberado.** El codigo de la landing lee claves por
       nombre, asi que borrar una no deja un hueco sino una pantalla rota, y sin
       rastro de que hubo algo ahi. Una clave que sobra se apaga con su valor.
@@ -372,6 +378,9 @@ paths:
       description: |
         La clave es la identidad del recurso: minusculas, numeros y los
         separadores `.` `_` `-` entre ellos. Repetirla es `409`.
+
+        **Tiene que tener esquema declarado**; si no, `400` en `key`. El valor
+        se valida contra ese esquema, igual que al reemplazar.
       operationId: crearSetting
       requestBody:
         required: true
@@ -456,6 +465,16 @@ paths:
         La cabecera ausente sale como `400 VALIDATION_FAILED` nombrando
         `If-Match`: la tabla de codigos de la seccion 2 del molde es normativa y
         no contempla `428`.
+
+        El valor se valida contra el esquema de la clave **antes** de escribir:
+        un `400` no sube la version. Cada problema nombra su campo desde
+        `value` (`value.name`, `value[0].href`, `value.links[2].href`). Los
+        enlaces solo aceptan rutas del sitio (`/precios`, no `//otro.com`) o
+        `https://`. Un campo con `format: media-id`, como `site.brand.logo`,
+        tiene que ser el id de una imagen subida; si no existe, `400` con code
+        `unknown`.
+
+        `isPublic` es opcional: **ausente conserva la visibilidad actual**.
       operationId: reemplazarSetting
       parameters:
         - name: If-Match
@@ -1210,7 +1229,12 @@ components:
       additionalProperties: false
       properties:
         value: {}
-        isPublic: { type: boolean, default: false }
+        isPublic:
+          type: boolean
+          description: |
+            **Ausente conserva la visibilidad actual.** Solo cambia si se manda.
+            Con `false` por omision, un formulario que solo edita el valor
+            escondia la clave de la landing en cada guardado.
 
     Bloque:
       description: |

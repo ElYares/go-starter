@@ -143,7 +143,10 @@ type MediaStore interface {
 }
 ```
 
-`app/` conecta `media.Module` a esa interfaz. Consecuencias que sí importan:
+`app/` conecta `media.Module` a esa interfaz. El primer puerto real es
+`settings/ports.go` (`Medios.Existe`), que valida el logo de la marca: por eso
+`app` **arma** `media` antes que `settings`, aunque el **registro** —el orden de
+las migraciones— siga poniendo `settings` primero. Consecuencias que sí importan:
 
 - `content` se prueba con un `MediaStore` de mentira, sin levantar `media`
 - Un fork que no tenga imágenes implementa la interfaz con dos líneas

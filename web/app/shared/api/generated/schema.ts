@@ -215,6 +215,9 @@ export interface paths {
          * Crear una clave de configuracion
          * @description La clave es la identidad del recurso: minusculas, numeros y los
          *     separadores `.` `_` `-` entre ellos. Repetirla es `409`.
+         *
+         *     **Tiene que tener esquema declarado**; si no, `400` en `key`. El valor
+         *     se valida contra ese esquema, igual que al reemplazar.
          */
         post: operations["crearSetting"];
         delete?: never;
@@ -253,6 +256,16 @@ export interface paths {
          *     La cabecera ausente sale como `400 VALIDATION_FAILED` nombrando
          *     `If-Match`: la tabla de codigos de la seccion 2 del molde es normativa y
          *     no contempla `428`.
+         *
+         *     El valor se valida contra el esquema de la clave **antes** de escribir:
+         *     un `400` no sube la version. Cada problema nombra su campo desde
+         *     `value` (`value.name`, `value[0].href`, `value.links[2].href`). Los
+         *     enlaces solo aceptan rutas del sitio (`/precios`, no `//otro.com`) o
+         *     `https://`. Un campo con `format: media-id`, como `site.brand.logo`,
+         *     tiene que ser el id de una imagen subida; si no existe, `400` con code
+         *     `unknown`.
+         *
+         *     `isPublic` es opcional: **ausente conserva la visibilidad actual**.
          */
         put: operations["reemplazarSetting"];
         post?: never;
@@ -644,8 +657,12 @@ export interface components {
          */
         SettingModificacion: {
             value: unknown;
-            /** @default false */
-            isPublic: boolean;
+            /**
+             * @description **Ausente conserva la visibilidad actual.** Solo cambia si se manda.
+             *     Con `false` por omision, un formulario que solo edita el valor
+             *     escondia la clave de la landing en cada guardado.
+             */
+            isPublic?: boolean;
         };
         /**
          * @description Una pieza de la pagina. `type` elige el componente que la dibuja y el

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/elyares/go-starter/api/internal/platform/audit"
@@ -29,8 +30,9 @@ type repoFalso struct {
 	err   error
 
 	// lo que quedo registrado de la ultima llamada
-	params paging.Params
-	sello  audit.Fields
+	params  paging.Params
+	sello   audit.Fields
+	publica *bool
 }
 
 func (r *repoFalso) listar(context.Context, bool) ([]Setting, error) {
@@ -66,7 +68,8 @@ func (r *repoFalso) crear(ctx context.Context, s Setting) (Setting, error) {
 	return s, nil
 }
 
-func (r *repoFalso) actualizar(ctx context.Context, s Setting) (Setting, error) {
+func (r *repoFalso) actualizar(ctx context.Context, s Setting, publica *bool) (Setting, error) {
+	r.publica = publica
 	sello, err := audit.ForUpdate(ctx)
 	if err != nil {
 		return Setting{}, err
@@ -84,10 +87,25 @@ func unSetting(key string) Setting {
 	return Setting{Key: key, Value: map[string]any{"a": 1}, Version: 7, UpdatedAt: time.Now()}
 }
 
-// servidor monta el modulo con la misma cadena que en produccion. Sin el
-// traceId las respuestas de error no serian las reales.
+// La cadena es la misma que en produccion. Sin el traceId las respuestas de
+// error no serian las reales.
+// mediosFalsos dice que existen los ids que tiene, y nada mas.
+type mediosFalsos map[uuid.UUID]bool
+
+func (m mediosFalsos) Existe(_ context.Context, id uuid.UUID) (bool, error) { return m[id], nil }
+
+// servidor monta el modulo con los esquemas de verdad: son parte de lo que se
+// prueba, no un detalle que se simula.
 func servidor(repo repositorio, actor *rbac.Actor) http.Handler {
-	m := &Module{svc: &Service{repo: repo}}
+	return servidorCon(repo, mediosFalsos{}, actor)
+}
+
+func servidorCon(repo repositorio, medios Medios, actor *rbac.Actor) http.Handler {
+	es, err := cargarEsquemas()
+	if err != nil {
+		panic(err)
+	}
+	m := &Module{svc: &Service{repo: repo, esquemas: es, medios: medios}}
 	r := httpx.NewRouter()
 	m.Routes(r)
 
@@ -333,7 +351,7 @@ func TestUnIfMatchViejoEs409(t *testing.T) {
 
 	rec := llamar(t, repo, escritor(), peticion{
 		metodo: http.MethodPut, ruta: "/api/v1/settings/site.brand",
-		cuerpo: `{"value":{"a":2}}`, ifMatch: `"3"`,
+		cuerpo: `{"value":{"name":"Otra"}}`, ifMatch: `"3"`,
 	})
 
 	if rec.Code != http.StatusConflict {
@@ -344,12 +362,14 @@ func TestUnIfMatchViejoEs409(t *testing.T) {
 	}
 }
 
+// Una clave declarada que todavia no esta en la base: por ejemplo, la de un
+// esquema recien agregado cuya migracion no corrio.
 func TestReemplazarUnaClaveQueNoExisteEs404(t *testing.T) {
 	repo := &repoFalso{err: errNoExiste}
 
 	rec := llamar(t, repo, escritor(), peticion{
-		metodo: http.MethodPut, ruta: "/api/v1/settings/no.existe",
-		cuerpo: `{"value":1}`, ifMatch: `"1"`,
+		metodo: http.MethodPut, ruta: "/api/v1/settings/site.footer",
+		cuerpo: `{"value":{"text":"hola"}}`, ifMatch: `"1"`,
 	})
 
 	if rec.Code != http.StatusNotFound {
@@ -362,7 +382,7 @@ func TestLaVersionQueLlegaAlRepositorioEsLaDelIfMatch(t *testing.T) {
 
 	rec := llamar(t, repo, escritor(), peticion{
 		metodo: http.MethodPut, ruta: "/api/v1/settings/site.brand",
-		cuerpo: `{"value":{"a":2},"isPublic":true}`, ifMatch: `"7"`,
+		cuerpo: `{"value":{"name":"Otra"},"isPublic":true}`, ifMatch: `"7"`,
 	})
 
 	if rec.Code != http.StatusOK {
@@ -380,7 +400,7 @@ func TestLaVersionQueLlegaAlRepositorioEsLaDelIfMatch(t *testing.T) {
 func TestCrearDevuelve201ConLocationYETag(t *testing.T) {
 	rec := llamar(t, &repoFalso{}, escritor(), peticion{
 		metodo: http.MethodPost, ruta: "/api/v1/settings",
-		cuerpo: `{"key":"site.footer","value":{"texto":"hola"},"isPublic":true}`,
+		cuerpo: `{"key":"site.footer","value":{"text":"hola"},"isPublic":true}`,
 	})
 
 	if rec.Code != http.StatusCreated {
@@ -397,7 +417,7 @@ func TestCrearDevuelve201ConLocationYETag(t *testing.T) {
 func TestUnaClaveDuplicadaEs409(t *testing.T) {
 	rec := llamar(t, &repoFalso{err: errYaExiste}, escritor(), peticion{
 		metodo: http.MethodPost, ruta: "/api/v1/settings",
-		cuerpo: `{"key":"site.brand","value":1}`,
+		cuerpo: `{"key":"site.brand","value":{"name":"Otra"}}`,
 	})
 
 	if rec.Code != http.StatusConflict {
@@ -448,7 +468,7 @@ func TestElActorDeLaPeticionLlegaALaAuditoriaSinQueNadieLoAsigne(t *testing.T) {
 
 	llamar(t, repo, escritor(), peticion{
 		metodo: http.MethodPost, ruta: "/api/v1/settings",
-		cuerpo: `{"key":"site.footer","value":1}`,
+		cuerpo: `{"key":"site.footer","value":{"text":"hola"}}`,
 	})
 
 	var esperado pgtype.UUID
@@ -477,7 +497,7 @@ func TestLaModificacionNoSellaLasColumnasDeCreacion(t *testing.T) {
 
 	llamar(t, repo, escritor(), peticion{
 		metodo: http.MethodPut, ruta: "/api/v1/settings/site.brand",
-		cuerpo: `{"value":1}`, ifMatch: `"7"`,
+		cuerpo: `{"value":{"name":"Otra"}}`, ifMatch: `"7"`,
 	})
 
 	for _, c := range repo.sello.Columns {

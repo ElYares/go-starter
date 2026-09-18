@@ -252,7 +252,7 @@ Tres cosas que no son obvias:
 
 ```sql
 settings (
-  key text pk,                          -- 'site.brand', 'site.nav', 'site.theme'
+  key text pk,                          -- site.brand, site.nav, site.footer, site.theme
   value jsonb not null,
   is_public boolean not null default false,
   version int not null default 1,
@@ -267,8 +267,25 @@ claves marcadas, y el filtro se resuelve **en la consulta**. Aquí viven tambié
 llaves de terceros y correos internos, así que el default es privado: abrir una
 clave al mundo es una decisión, no un descuido.
 
-Clave-valor con esquema por clave, validado como los bloques. Es donde vive lo
-que el fork cambia sin tocar código: nombre, logo, colores, menú, pie, redes.
+Clave-valor con **esquema por clave**: un JSON Schema en
+`settings/esquemas/<clave>.json`, compilado al arrancar y aplicado antes de
+escribir. Es donde vive lo que el fork cambia sin tocar código: nombre, logo,
+colores, menú, pie.
+
+- **Una clave sin esquema no se acepta** (`400` en `key`), ni al crear ni al
+  reemplazar. Agregar una clave es agregar su archivo y sembrarla en una
+  migración con un valor que lo cumpla; una prueba lee los `.sql` y lo comprueba
+- **Los esquemas los compila `platform/esquema`**, el mismo paquete que usan los
+  bloques de `content`, así que los errores tienen las mismas rutas y códigos
+  (`value.links[2].href:format`)
+- **`format: media-id`** marca un campo que guarda el id de una imagen. El
+  esquema exige que sea un uuid; que exista lo pregunta el service a `media` por
+  su puerto (`settings/ports.go`), y solo si el resto del valor ya es válido
+- **Un enlace es una ruta del sitio o `https://`**: `^(/([^/]|$)|https://)`.
+  `//otro.com` empieza por `/` y lleva a otro sitio
+- **Un `PUT` sin `isPublic` conserva la visibilidad** (`coalesce` en el
+  `UPDATE`). Antes, ausente era `false`, y guardar una clave pública desde un
+  formulario que solo edita el valor la escondía de la landing
 
 **No es un cajón de sastre.** Si algo tiene reglas propias, ciclo de vida o se
 consulta con filtros, es una tabla, no un setting.

@@ -98,6 +98,9 @@ type Setting struct {
 // recurso y viaja en la ruta. Aceptarla aqui abriria la puerta a un `PUT`
 // que renombra la fila que estaba editando otro.
 type SettingModificacion struct {
+	// IsPublic **Ausente conserva la visibilidad actual.** Solo cambia si se manda.
+	// Con `false` por omision, un formulario que solo edita el valor
+	// escondia la clave de la landing en cada guardado.
 	IsPublic *bool       `json:"isPublic,omitempty"`
 	Value    interface{} `json:"value"`
 }
