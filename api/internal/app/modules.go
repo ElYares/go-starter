@@ -9,11 +9,13 @@ import (
 
 	"github.com/elyares/go-starter/api/internal/modules/content"
 	"github.com/elyares/go-starter/api/internal/modules/identity"
+	"github.com/elyares/go-starter/api/internal/modules/media"
 	"github.com/elyares/go-starter/api/internal/modules/settings"
 	"github.com/elyares/go-starter/api/internal/platform/auth"
 	"github.com/elyares/go-starter/api/internal/platform/config"
 	"github.com/elyares/go-starter/api/internal/platform/db"
 	"github.com/elyares/go-starter/api/internal/platform/rbac"
+	"github.com/elyares/go-starter/api/internal/platform/storage"
 )
 
 // modules es la tabla de contenidos del backend, escrita a mano.
@@ -29,7 +31,8 @@ import (
 // Devuelve error porque armar el modulo de identidad exige una llave de firma
 // valida, y un starter que arranca con una llave vacia firma tokens que
 // cualquiera puede reproducir. Es preferible no levantar. Por lo mismo falla si
-// el catalogo de bloques de content no compila.
+// el catalogo de bloques de content no compila, o si no se puede escribir donde
+// van los archivos subidos.
 func Modules(cfg config.Config, pool *pgxpool.Pool) ([]Module, error) {
 	firmante, err := auth.NewFirmante(cfg.JWTSigningKey)
 	if err != nil {
@@ -43,10 +46,19 @@ func Modules(cfg config.Config, pool *pgxpool.Pool) ([]Module, error) {
 		return nil, err
 	}
 
+	// Un directorio sin permisos tiene que impedir arrancar, no ser un 500 en
+	// la primera subida.
+	archivos, err := storage.NewLocal(cfg.StoragePath)
+	if err != nil {
+		return nil, err
+	}
+
 	return []Module{
 		// primero: los demas dependen de el
 		identity.New(pool, cfg.IsDev(), firmante, auth.NewIntentos(), auth.NewEmisor(cfg.CookieSecure)),
 		settings.New(pool),
+		media.New(pool, archivos),
+		// despues de media: lo usara por interfaz (ports.go), nunca por import
 		contenido,
 		// catalog.New(...),    // <- un fork agrega su dominio aqui
 	}, nil

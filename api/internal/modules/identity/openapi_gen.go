@@ -61,6 +61,9 @@ type Problem struct {
 	Type     *string `json:"type,omitempty"`
 }
 
+// MedioId defines model for MedioId.
+type MedioId = openapi_types.UUID
+
 // PaginaId defines model for PaginaId.
 type PaginaId = openapi_types.UUID
 

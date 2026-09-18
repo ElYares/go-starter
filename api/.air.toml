@@ -6,7 +6,7 @@ tmp_dir = "tmp"
   cmd = "go build -o ./tmp/server ./cmd/server"
   bin = "./tmp/server"
   include_ext = ["go", "yaml", "yml", "sql"]
-  exclude_dir = ["tmp", "test"]
+  exclude_dir = ["tmp", "test", ".storage"]
   # Sin esto, air reinicia en bucle: el binario que escribe en tmp/ dispara su
   # propio vigilante.
   exclude_regex = ["_test\\.go"]

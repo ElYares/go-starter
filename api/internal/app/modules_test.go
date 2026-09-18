@@ -4,6 +4,8 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -101,7 +103,11 @@ func TestDosModulosNoPuedenDeclararElMismoPermiso(t *testing.T) {
 // ella, y eso es a proposito —un starter que firma con una llave vacia emite
 // tokens que cualquiera reproduce.
 func configDePrueba() config.Config {
-	return config.Config{Env: "dev", JWTSigningKey: "llave-de-prueba-no-usar-fuera-de-aqui"}
+	return config.Config{
+		Env:           "dev",
+		JWTSigningKey: "llave-de-prueba-no-usar-fuera-de-aqui",
+		StoragePath:   filepath.Join(os.TempDir(), "go-starter-pruebas-de-app"),
+	}
 }
 
 func modulosDePrueba(t *testing.T) []Module {
@@ -131,7 +137,7 @@ func TestElRegistroDeclaraLosModulosEsperados(t *testing.T) {
 	// identity va primero porque es el orden de las migraciones, y las llaves
 	// foraneas de los demas apuntan a sus usuarios. Cambiar este orden no es
 	// cosmetico: rompe la migracion en una base vacia.
-	esperado := []string{"identity", "settings", "content"}
+	esperado := []string{"identity", "settings", "media", "content"}
 	if strings.Join(nombres, ",") != strings.Join(esperado, ",") {
 		t.Errorf("modulos registrados = %v, se esperaba %v\nsi agregaste uno, actualiza esta prueba y confirma que su posicion en la lista es la que quieres: es el orden en que corren las migraciones", nombres, esperado)
 	}

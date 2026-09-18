@@ -17,6 +17,7 @@ type Config struct {
 	CookieSecure   bool
 	APIDocsEnabled bool
 	MigrateOnStart bool
+	StoragePath    string
 }
 
 func (c Config) IsDev() bool { return c.Env == "dev" }
@@ -51,6 +52,11 @@ func Load() (Config, error) {
 		// eso el default es false y en produccion se usa `cmd/migrate` como
 		// paso explicito del despliegue. Ver docs/08-infra-local.md.
 		MigrateOnStart: boolWithDefault("MIGRATE_ON_START", false),
+		// Donde viven los archivos subidos. Sin default: uno relativo al
+		// directorio de trabajo acabaria, en un contenedor, escribiendo en una
+		// capa que se pierde al redesplegar, y eso se descubre cuando faltan
+		// las imagenes. Ver docs/08-infra-local.md.
+		StoragePath: require("STORAGE_PATH"),
 	}
 
 	if len(missing) > 0 {

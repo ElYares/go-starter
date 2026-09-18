@@ -413,6 +413,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Subir una imagen
+         * @description `multipart/form-data` con el archivo en el campo `file`, que va
+         *     **primero**: un campo con otro nombre antes de el es `400`, porque
+         *     aceptarlo en silencio haria creer que se guardo algo que no. Lo que
+         *     venga despues de `file` no se lee.
+         *
+         *     El archivo se lee en streaming: el SHA-256 se calcula mientras llega y
+         *     el tope se aplica durante la lectura, no despues. Pasar de 5 MB es
+         *     `413` y no deja nada escrito.
+         *
+         *     Si ya existe un archivo con los mismos bytes, responde `200` con ese
+         *     registro, aunque el nombre sea otro. Dos subidas simultaneas del mismo
+         *     archivo terminan en un solo registro.
+         */
+        post: operations["subirMedio"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MedioId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Leer los datos de una imagen
+         * @description Los metadatos, no los bytes: los bytes se sirven en
+         *     `/public/media/{id}`, que es la direccion que se pone en un `<img>`.
+         */
+        get: operations["leerMedio"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/media/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MedioId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Los bytes de una imagen
+         * @description Sin sesion: es lo que pide el navegador del visitante desde un `<img>`.
+         *     El `Content-Type` es el que se dedujo al subir, con
+         *     `X-Content-Type-Options: nosniff` para que el navegador no adivine otro.
+         *
+         *     Un registro no cambia nunca, asi que la respuesta se puede guardar en
+         *     cache para siempre (`immutable`).
+         */
+        get: operations["leerMedioPublico"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -715,6 +796,36 @@ export interface components {
             blocks: components["schemas"]["Bloque"][];
         };
         /**
+         * @description Una imagen subida. No tiene `version` ni `updatedAt`: un registro no se
+         *     modifica nunca, porque el archivo ES su contenido.
+         */
+        Medio: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description Donde se sirven los bytes. Es lo que va en un `<img>`.
+             * @example /api/v1/public/media/0192a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b
+             */
+            url: string;
+            /** @enum {string} */
+            mime: "image/png" | "image/jpeg" | "image/webp";
+            /** Format: int64 */
+            sizeBytes: number;
+            width: number;
+            height: number;
+            /** @description El SHA-256 de los bytes, en hexadecimal. */
+            sha256: string;
+            /**
+             * @description El nombre con el que se subio la PRIMERA vez. Una segunda subida con
+             *     otro nombre devuelve el registro existente y no lo cambia.
+             */
+            originalName: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            createdBy: string | null;
+        };
+        /**
          * @description La forma unica de error de toda la API (RFC 7807) con dos campos
          *     propios: `code`, estable y en mayusculas, es lo que el cliente
          *     interpreta; `traceId` es lo que se busca en el log.
@@ -763,6 +874,7 @@ export interface components {
          */
         Slug: string;
         PaginaId: string;
+        MedioId: string;
         /**
          * @description El `ETag` que devolvio la lectura. `*` no se acepta.
          * @example "7"
@@ -1495,6 +1607,108 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    subirMedio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description El archivo ya existia; es el registro de entonces */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Medio"];
+                };
+            };
+            /** @description Subido */
+            201: {
+                headers: {
+                    /**
+                     * @description URL del registro recien creado
+                     * @example /api/v1/media/0192a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b
+                     */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Medio"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    leerMedio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MedioId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El registro */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Medio"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    leerMedioPublico: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MedioId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los bytes */
+            200: {
+                headers: {
+                    /** @example public, max-age=31536000, immutable */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/webp": string;
+                };
+            };
+            400: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
         };

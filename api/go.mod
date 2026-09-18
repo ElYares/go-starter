@@ -10,6 +10,7 @@ require (
 	github.com/pressly/goose/v3 v3.28.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	golang.org/x/crypto v0.55.0
+	golang.org/x/image v0.40.0
 )
 
 require (

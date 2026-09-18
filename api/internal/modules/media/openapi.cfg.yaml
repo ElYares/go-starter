@@ -1,0 +1,10 @@
+# Generacion del lado del servidor para este modulo. El porque de cada opcion
+# esta en content/openapi.cfg.yaml; aqui solo cambia el tag.
+package: media
+output: openapi_gen.go
+generate:
+  models: true
+  std-http-server: true
+output-options:
+  include-tags:
+    - media

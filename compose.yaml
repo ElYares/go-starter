@@ -46,6 +46,10 @@ services:
       # Solo desarrollo. En produccion las migraciones son un paso explicito del
       # despliegue (`cmd/migrate`): dos replicas migrando a la vez es una carrera.
       MIGRATE_ON_START: "true"
+      # Los archivos subidos. Dentro del bind mount para que sobrevivan a
+      # reconstruir el contenedor y se puedan mirar desde el host; api/.storage/
+      # esta en .gitignore y air no lo vigila.
+      STORAGE_PATH: /workspace/.storage
     command: ["air", "-c", ".air.toml"]
     volumes:
       - ./api:/workspace
