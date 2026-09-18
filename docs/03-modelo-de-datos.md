@@ -34,6 +34,7 @@ permissions (
   sensitive boolean not null default false  -- lo marca el módulo. Ver abajo
 )
 role_permissions (role_id, permission_key)              -- pk compuesta, on delete cascade
+role_permission_offers (role_id, permission_key)        -- lo que la siembra ya ofrecio. Ver abajo
 user_roles (user_id, role_id)                           -- pk compuesta, on delete cascade
 
 refresh_tokens (
@@ -69,12 +70,15 @@ Siete cosas que no son obvias:
   transacción. Sin eso, el permiso de un módulo nuevo nace inalcanzable: nadie
   lo tiene, y la pantalla para concederlo también lo exige. Sus concesiones no
   son datos editables: se reconcilian en cada despliegue
-- **El rol `admin` arranca con lo que ningún módulo marcó como sensible, y solo
-  si todavía no tiene ninguna concesión.** Es un punto de partida para un fork
-  recién clonado, no una regla permanente: a partir del primer arranque sus
-  concesiones son datos que se editan, y lo que se le quite desde el dashboard
-  queda quitado. Sin esa condición, la siembra pelearía con la pantalla de roles
-  y el permiso revocado volvería en el siguiente despliegue
+- **El rol `admin` recibe lo que ningún módulo marcó como sensible, una vez
+  por permiso.** La siembra le concede lo que todavía no se le ofreció y lo
+  anota en `role_permission_offers`. Quitar una concesión no toca su oferta, así
+  que lo que se le quite desde el dashboard queda quitado; y el permiso de un
+  módulo que llega a una instalación ya arrancada le llega igual, porque es
+  nuevo. Repartirle en cada despliegue haría que lo revocado volviera solo;
+  repartirle una sola vez en la vida dejaría cada módulo nuevo solo en manos del
+  superadmin. Si un módulo se borra, su oferta se va por cascada con el permiso,
+  y si vuelve, se ofrece otra vez
 - **`Sensitive` lo decide el módulo que inventa el permiso**, en su
   `Permissions()`, porque es el único que sabe qué hace. Una lista en la siembra
   —"todo lo que empiece por `identity.`"— habría que editarla desde fuera cada
@@ -264,6 +268,8 @@ erDiagram
     roles ||--o{ user_roles : agrupa
     roles ||--o{ role_permissions : concede
     permissions ||--o{ role_permissions : es
+    roles ||--o{ role_permission_offers : "se le ofrecio"
+    permissions ||--o{ role_permission_offers : ofrecido
     users ||--o{ refresh_tokens : abre
     users ||--o{ pages : crea
     pages ||--o{ page_versions : versiona
