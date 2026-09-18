@@ -1,6 +1,5 @@
-import type { ApiError } from '~/shared/api/errors'
 import type { Schemas } from '~/shared/api/generated'
-import type { Esquema } from '~/shared/blocks/catalogo'
+import { valorInicial, type Esquema } from '~/shared/formularios/esquema'
 
 // La logica del editor de paginas, sin Vue ni Nuxt: que se crea al agregar un
 // bloque, como se mueve, que errores tocan a que campo y cuando hay cambios.
@@ -65,30 +64,6 @@ export function estadoDePublicacion(p: Schemas['Pagina']): EstadoDePublicacion {
 }
 
 /**
- * El valor con el que nace un campo: lo minimo para que el esquema tenga donde
- * poner lo obligatorio. Lo opcional no se crea: un `subtitle: ""` que nadie
- * escribio no es lo mismo que no tener bajada.
- */
-export function valorInicial(esquema: Esquema): unknown {
-  switch (esquema.type) {
-    case 'string':
-      return ''
-    case 'object': {
-      const obj: Record<string, unknown> = {}
-      for (const clave of esquema.required ?? []) {
-        const prop = esquema.properties?.[clave]
-        if (prop) obj[clave] = valorInicial(prop)
-      }
-      return obj
-    }
-    case 'array':
-      return Array.from({ length: esquema.minItems ?? 0 }, () => (esquema.items ? valorInicial(esquema.items) : null))
-    default:
-      return null
-  }
-}
-
-/**
  * Un bloque nuevo del tipo pedido, con un id que no usa ningun otro de la
  * pagina. El servidor rechaza ids repetidos, y el editor los usa como clave.
  */
@@ -97,29 +72,6 @@ export function nuevoBloque(tipo: string, esquema: Esquema, existentes: readonly
   let n = 1
   while (usados.has(`${tipo}-${n}`)) n++
   return { id: `${tipo}-${n}`, type: tipo, props: valorInicial(esquema) as Record<string, unknown> }
-}
-
-/** Mueve un elemento una posicion. Fuera de rango, devuelve la lista igual. */
-export function mover<T>(lista: readonly T[], i: number, delta: -1 | 1): T[] {
-  const j = i + delta
-  if (i < 0 || i >= lista.length || j < 0 || j >= lista.length) return [...lista]
-  const copia = [...lista]
-  ;[copia[i], copia[j]] = [copia[j]!, copia[i]!]
-  return copia
-}
-
-/**
- * Los errores de un 400, por campo. La ruta es la del api
- * (`blocks[2].props.items[0].title`), que es la misma con la que el formulario
- * nombra sus campos. Si un campo trae varios, se queda el primero: un campo
- * muestra un mensaje, no una lista.
- */
-export function erroresPorCampo(fallo: ApiError | null | undefined): Record<string, string> {
-  const out: Record<string, string> = {}
-  for (const e of fallo?.errors ?? []) {
-    out[e.field] ??= e.message
-  }
-  return out
 }
 
 /**

@@ -6,7 +6,8 @@ import { RouterLink } from 'vue-router'
 import { BaseBadge, BaseButton, BaseDialog, BaseEmptyState, BaseField, BaseInput, BaseTable, type ColumnaTabla } from '~/shared/ui'
 import { ApiError } from '~/shared/api/errors'
 import type { Schemas } from '~/shared/api/generated'
-import { erroresPorCampo, sugerirSlug } from '../editor'
+import { erroresPorCampo } from '~/shared/formularios/esquema'
+import { sugerirSlug } from '../editor'
 
 const props = defineProps<{
   cargar: () => Promise<Schemas['PaginasPage']>

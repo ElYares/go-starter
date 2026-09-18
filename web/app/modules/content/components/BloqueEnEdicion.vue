@@ -7,9 +7,9 @@
 // mientras siga ahi, y el aviso lo dice antes de que alguien lo intente.
 import { computed } from 'vue'
 import { BaseBadge, BaseButton } from '~/shared/ui'
-import type { Esquema } from '~/shared/blocks/catalogo'
+import CampoDeEsquema from '~/shared/formularios/CampoDeEsquema.vue'
+import type { Esquema } from '~/shared/formularios/esquema'
 import { bloqueConError, type Bloque } from '../editor'
-import CampoDeEsquema from './CampoDeEsquema.vue'
 
 const props = withDefaults(
   defineProps<{

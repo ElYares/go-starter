@@ -11,8 +11,7 @@
 // lo tiene.
 import { computed } from 'vue'
 import { BaseButton, BaseField, BaseInput, BaseTextarea } from '~/shared/ui'
-import type { Esquema } from '~/shared/blocks/catalogo'
-import { mover, valorInicial } from '../editor'
+import { mover, valorInicial, type Esquema } from './esquema'
 
 defineOptions({ name: 'CampoDeEsquema' })
 
