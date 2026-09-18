@@ -218,22 +218,35 @@ recurso de B" del checklist de `04-reglas-de-crud.md`.
 media (
   id uuid pk,
   sha256 bytea not null,                -- deduplicación
-  mime text not null,                   -- deducido de los BYTES, no del nombre
+  mime text not null,                   -- deducido de los BYTES: png, jpeg o webp
   size_bytes bigint not null,
-  width int, height int,
-  original_name text,
-  storage_key text not null,            -- ruta dentro de storage.Store
-  created_at, created_by,
+  width int not null, height int not null,
+  original_name text,                   -- el de la PRIMERA subida
+  storage_key text not null,            -- ruta dentro de storage.Store, sale del hash
+  created_at, created_by,               -- solo creación: una fila no se modifica
   unique (sha256)
 )
 ```
 
 El archivo crudo **no vive en la base**: vive detrás de `platform/storage.Store`,
-con implementación local en desarrollo. La base guarda metadatos y la llave.
+con implementación en disco (`STORAGE_PATH`). La base guarda metadatos y la llave.
 
 Deduplicar por `sha256` significa que subir dos veces la misma imagen responde
 `200` con el registro existente en vez de `201`. Es una decisión de contrato,
 no un detalle: ver `04-reglas-de-crud.md`.
+
+Tres cosas que no son obvias:
+
+- **La dedup concurrente la decide el índice**, con `on conflict (sha256) do
+  nothing` en la misma sentencia. Un `select` previo deja una ventana en la que
+  dos subidas simultáneas creen ser la primera, y la segunda choca con el
+  índice: un `500`
+- **La llave sale del hash** (`6e/6ed8f5…`), así que la misma imagen cae siempre
+  en el mismo archivo. Dos subidas simultáneas escriben los mismos bytes en el
+  mismo lugar, y eso es inofensivo
+- **Primero el archivo, después la fila.** Al revés, una fila podría apuntar a
+  nada. Lo contrario —un archivo sin fila, si la inserción falla— es basura
+  inofensiva que la siguiente subida de esa imagen reutiliza
 
 ## Configuración del sitio (`modules/settings`)
 

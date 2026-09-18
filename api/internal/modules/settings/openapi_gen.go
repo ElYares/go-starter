@@ -126,6 +126,9 @@ type SettingsPage struct {
 	Page PageMeta `json:"page"`
 }
 
+// MedioId defines model for MedioId.
+type MedioId = openapi_types.UUID
+
 // Page defines model for Page.
 type Page = int
 

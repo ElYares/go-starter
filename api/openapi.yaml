@@ -52,6 +52,20 @@ tags:
 
       Las paginas no tienen dueno: son del sitio, no de quien las creo. Quien
       tiene `content.page.write` edita cualquiera.
+  - name: media
+    description: |
+      Las imagenes que usa el sitio: el logo, las del contenido.
+
+      **Un archivo es su contenido.** Se identifica por el SHA-256 de sus bytes,
+      asi que subir dos veces la misma imagen devuelve el registro que ya
+      existia (`200`) en vez de crear otro. El tipo se deduce de los bytes, no
+      del nombre ni del `Content-Type` que manda el cliente.
+
+      Solo PNG, JPEG y WebP, hasta 5 MB. **SVG no**: es XML que puede llevar
+      `<script>`, y servirlo desde el mismo origen es un XSS.
+
+      No hay listado ni borrado todavia: borrar exige saber quien usa cada
+      archivo, y eso llega con la biblioteca de medios.
 
 paths:
   /healthz:
@@ -789,6 +803,136 @@ paths:
         "500":
           $ref: "#/components/responses/Problem"
 
+  /media:
+    post:
+      tags: [media]
+      summary: Subir una imagen
+      description: |
+        `multipart/form-data` con el archivo en el campo `file`, que va
+        **primero**: un campo con otro nombre antes de el es `400`, porque
+        aceptarlo en silencio haria creer que se guardo algo que no. Lo que
+        venga despues de `file` no se lee.
+
+        El archivo se lee en streaming: el SHA-256 se calcula mientras llega y
+        el tope se aplica durante la lectura, no despues. Pasar de 5 MB es
+        `413` y no deja nada escrito.
+
+        Si ya existe un archivo con los mismos bytes, responde `200` con ese
+        registro, aunque el nombre sea otro. Dos subidas simultaneas del mismo
+        archivo terminan en un solo registro.
+      operationId: subirMedio
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: El archivo ya existia; es el registro de entonces
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Medio"
+        "201":
+          description: Subido
+          headers:
+            Location:
+              description: URL del registro recien creado
+              schema:
+                type: string
+              example: /api/v1/media/0192a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Medio"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+  /media/{id}:
+    parameters:
+      - $ref: "#/components/parameters/MedioId"
+    get:
+      tags: [media]
+      summary: Leer los datos de una imagen
+      description: |
+        Los metadatos, no los bytes: los bytes se sirven en
+        `/public/media/{id}`, que es la direccion que se pone en un `<img>`.
+      operationId: leerMedio
+      responses:
+        "200":
+          description: El registro
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Medio"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+  /public/media/{id}:
+    parameters:
+      - $ref: "#/components/parameters/MedioId"
+    get:
+      tags: [media]
+      summary: Los bytes de una imagen
+      description: |
+        Sin sesion: es lo que pide el navegador del visitante desde un `<img>`.
+        El `Content-Type` es el que se dedujo al subir, con
+        `X-Content-Type-Options: nosniff` para que el navegador no adivine otro.
+
+        Un registro no cambia nunca, asi que la respuesta se puede guardar en
+        cache para siempre (`immutable`).
+      operationId: leerMedioPublico
+      security: []
+      responses:
+        "200":
+          description: Los bytes
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              example: public, max-age=31536000, immutable
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -835,6 +979,14 @@ components:
       example: inicio
 
     PaginaId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    MedioId:
       name: id
       in: path
       required: true
@@ -1276,6 +1428,48 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Bloque"
+
+    Medio:
+      description: |
+        Una imagen subida. No tiene `version` ni `updatedAt`: un registro no se
+        modifica nunca, porque el archivo ES su contenido.
+      type: object
+      required:
+        - id
+        - url
+        - mime
+        - sizeBytes
+        - width
+        - height
+        - sha256
+        - originalName
+        - createdAt
+        - createdBy
+      properties:
+        id: { type: string, format: uuid }
+        url:
+          type: string
+          description: Donde se sirven los bytes. Es lo que va en un `<img>`.
+          example: /api/v1/public/media/0192a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b
+        mime:
+          type: string
+          enum: [image/png, image/jpeg, image/webp]
+        sizeBytes: { type: integer, format: int64, minimum: 1 }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        sha256:
+          type: string
+          description: El SHA-256 de los bytes, en hexadecimal.
+          pattern: "^[0-9a-f]{64}$"
+        originalName:
+          type: [string, "null"]
+          description: |
+            El nombre con el que se subio la PRIMERA vez. Una segunda subida con
+            otro nombre devuelve el registro existente y no lo cambia.
+        createdAt: { type: string, format: date-time }
+        createdBy:
+          type: [string, "null"]
+          format: uuid
 
     Problem:
       description: |

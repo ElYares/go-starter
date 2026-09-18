@@ -149,12 +149,19 @@ JWT_SIGNING_KEY          # sin default. Si falta, el proceso no arranca
 COOKIE_SECURE            # false solo en local sin TLS
 API_DOCS_ENABLED         # la UI de /api/v1/docs; se apaga sola fuera de dev
 MIGRATE_ON_START         # el compose la pone en true para desarrollo
+STORAGE_PATH             # sin default. Los archivos subidos; el compose la pone
 NUXT_PUBLIC_API_BASE     # /api/v1        (lo usa el navegador)
 NUXT_API_INTERNAL        # http://api:8080/api/v1  (lo usa el SSR)
 ```
 
-`.env.example` es la referencia con valores de local. `STORAGE_PATH` llega con
-los medios, en la fase 3; hoy nadie la lee.
+`.env.example` es la referencia con valores de local.
+
+**`STORAGE_PATH`** es donde `media` guarda los archivos subidos, y **no tiene
+default**: en un contenedor, un directorio que no sea un volumen se pierde al
+redesplegar, y eso se descubre cuando faltan las imágenes. El compose la pone en
+`/workspace/.storage` —`api/.storage/` en el host, fuera de git y fuera de lo que
+vigila air— y el CI en `.storage`, relativa a `api/`. Si no se puede escribir
+ahí, el proceso no arranca.
 
 Que el proceso **muera al arrancar** si falta un secreto, en vez de degradarse a
 un default, es deliberado: un servicio a medio configurar que responde `200` es

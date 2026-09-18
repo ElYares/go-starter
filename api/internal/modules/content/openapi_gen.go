@@ -227,6 +227,9 @@ type VersionesPage struct {
 // IfMatch defines model for IfMatch.
 type IfMatch = string
 
+// MedioId defines model for MedioId.
+type MedioId = openapi_types.UUID
+
 // Page defines model for Page.
 type Page = int
 

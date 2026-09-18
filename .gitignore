@@ -3,6 +3,8 @@
 
 # Go
 api/tmp/
+# Los archivos subidos en desarrollo (STORAGE_PATH del compose)
+api/.storage/
 api/bin/
 *.test
 

@@ -59,6 +59,8 @@ jobs:
       # Credencial de usar y tirar, de un servicio que vive lo que dura el
       # trabajo y no publica nada fuera del runner. config.Load() la exige.
       JWT_SIGNING_KEY: solo-para-ci-no-es-un-secreto
+      # Relativa al directorio del trabajo (api/). Muere con el runner.
+      STORAGE_PATH: .storage
 
     steps:
       - uses: actions/checkout@v7
