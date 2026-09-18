@@ -53,6 +53,67 @@ Antes de escribir nada propio: cambiar los tokens y ver la landing con la marca
 del proyecto. Es diez minutos y evita construir tres semanas sobre una identidad
 prestada.
 
+## Medir un fork: la hora de la Fase 5
+
+El "hecho cuando" de la Fase 5 (`10-roadmap.md`) es que un fork nuevo llega a
+"landing propia publicada" en **menos de una hora, medida y no estimada**
+(CU-007). Esto es el cronómetro: se sigue la guía de arriba como alguien que la
+lee por primera vez, y se anota la hora de cada paso. **Lo que no dice la guía
+también se anota**, aunque se resuelva en un minuto: esa es la información que
+vale.
+
+### Antes de arrancar el reloj
+
+No cuentan en la hora, porque no son del starter:
+
+- [ ] `gh auth status` con permiso para crear repos en la cuenta u organización
+- [ ] Docker corriendo, `devherd` instalado y `devherd doctor` en verde
+- [ ] `openssl` y `curl` a mano
+- [ ] Un logo en PNG, JPEG o WebP de menos de 5 MB, y un color de marca
+- [ ] Un nombre para el fork (minúsculas, dígitos y guiones) y su módulo Go
+      (`github.com/<cuenta>/<nombre>`)
+
+### El recorrido
+
+| # | Paso | Qué se hace | Inicio | Fin | Min |
+|---|---|---|---|---|---|
+| 1 | Nacer | `gh repo create <nombre> --template ElYares/go-starter --private --clone` y `cd <nombre>` | | | |
+| 2 | Renombrar | `./scripts/rename.sh <nombre> <modulo-go>`, revisar `git diff --stat` y commitear | | | |
+| 3 | Configurar | `cp .env.example .env` y `JWT_SIGNING_KEY` con `openssl rand -base64 48` | | | |
+| 4 | Levantar | `devherd up && devherd proxy apply` (pide sudo), hasta que `http://<nombre>.localhost/` muestre la landing con el nombre nuevo | | | |
+| 5 | Sembrar | `./scripts/seed.sh` y entrar en `/admin` con `superadmin@<nombre>.localhost` | | | |
+| 6 | La piel | En `web/app/assets/tokens/base.css`, el color de marca: `--color-accent`, `--color-accent-strong` y `--color-on-accent`, **en el bloque claro y en el oscuro**. Ver el botón de la portada con el color nuevo | | | |
+| 7 | La marca | `/admin` → Configuración: `site.brand` (nombre y logo), `site.nav` (al menos un enlace más) y `site.footer` | | | |
+| 8 | La portada | `/admin` → Páginas → la portada: cambiar el título del hero, **Guardar** y **Publicar** | | | |
+| 9 | Comprobar | El bloque de abajo, sin JavaScript | | | |
+| | **Total** | Del inicio del paso 1 al fin del paso 9 | | | |
+
+```sh
+# Paso 9: lo que ve un buscador. Tiene que traer el nombre, el logo y el título nuevos.
+curl -s -H 'Accept: text/html' http://<nombre>.localhost/ \
+  | grep -oE '<img[^>]*class="logo"[^>]*>|<h1[^>]*>[^<]*</h1>|<footer.*</footer>'
+```
+
+El color no sale en ese HTML (en desarrollo el CSS llega aparte): se comprueba a
+la vista en el paso 6, y en claro y oscuro si el sistema deja cambiarlo.
+
+### Las fricciones
+
+Cada tropiezo, con su paso y lo que costó. Al cerrar CU-007, **cada fila termina
+en un fix del starter o en una historia del backlog**; ninguna se queda como
+nota.
+
+| Paso | Qué pasó | Min perdidos | Qué se hace con esto |
+|---|---|---|---|
+| | | | |
+
+### El resultado
+
+- Medido el: ____ · por: ____ · total: ____ min
+- Si pasa de 60, la Fase 5 no se cierra: se atacan las fricciones más caras y
+  se vuelve a medir. El resultado de cada corrida se escribe aquí, con su fecha;
+  no se borra el anterior
+
 ## Agregar un módulo de dominio
 
 ```sh
