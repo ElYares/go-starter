@@ -27,6 +27,7 @@ cd mi-tienda
 ./scripts/rename.sh mi-tienda github.com/acme/mi-tienda   # y commitear el resultado
 cp .env.example .env
 # JWT_SIGNING_KEY no tiene default: openssl rand -base64 48
+# HOST_UID y HOST_GID, los de `id -u` e `id -g` (en macOS suele ser 501, no 1000)
 devherd up && devherd proxy apply
 ./scripts/seed.sh                      # migraciones, permisos y el superadmin
 ```
@@ -79,10 +80,10 @@ No cuentan en la hora, porque no son del starter:
 |---|---|---|---|---|---|
 | 1 | Nacer | `gh repo create <nombre> --template ElYares/go-starter --private --clone` y `cd <nombre>` | | | |
 | 2 | Renombrar | `./scripts/rename.sh <nombre> <modulo-go>`, revisar `git diff --stat` y commitear | | | |
-| 3 | Configurar | `cp .env.example .env` y `JWT_SIGNING_KEY` con `openssl rand -base64 48` | | | |
+| 3 | Configurar | `cp .env.example .env`, `JWT_SIGNING_KEY` con `openssl rand -base64 48`, y `HOST_UID`/`HOST_GID` con `id -u`/`id -g` | | | |
 | 4 | Levantar | `devherd up && devherd proxy apply` (pide sudo), hasta que `http://<nombre>.localhost/` muestre la landing con el nombre nuevo | | | |
 | 5 | Sembrar | `./scripts/seed.sh` y entrar en `/admin` con `superadmin@<nombre>.localhost` | | | |
-| 6 | La piel | En `web/app/assets/tokens/base.css`, el color de marca: `--color-accent`, `--color-accent-strong` y `--color-on-accent`, **en el bloque claro y en el oscuro**. Ver el botón de la portada con el color nuevo | | | |
+| 6 | La piel | En `web/app/assets/tokens/base.css`, el color de marca: `--color-accent`, `--color-accent-strong` y `--color-on-accent`, **en el bloque claro y en el oscuro**. Correr la prueba de contraste (abajo) hasta que pase, y ver el botón de la portada con el color nuevo | | | |
 | 7 | La marca | `/admin` → Configuración: `site.brand` (nombre y logo), `site.nav` (al menos un enlace más) y `site.footer` | | | |
 | 8 | La portada | `/admin` → Páginas → la portada: cambiar el título del hero, **Guardar** y **Publicar** | | | |
 | 9 | Comprobar | El bloque de abajo, sin JavaScript | | | |
@@ -96,6 +97,23 @@ curl -s -H 'Accept: text/html' http://<nombre>.localhost/ \
 
 El color no sale en ese HTML (en desarrollo el CSS llega aparte): se comprueba a
 la vista en el paso 6, y en claro y oscuro si el sistema deja cambiarlo.
+
+**El contraste del paso 6 lo mide una prueba**, y conviene correrla al cambiar
+los colores y no enterarse en el CI:
+
+```sh
+docker exec -w /workspace "$(docker ps -q \
+  --filter label=com.docker.compose.project.working_dir="$PWD" \
+  --filter label=com.docker.compose.service=web)" \
+  npx vitest run test/tokens-contraste.spec.ts
+```
+
+`--color-on-accent` tiene que leerse a 4.5:1 sobre **dos** rellenos:
+`--color-accent` y `--color-accent-strong`. Un color de marca claro con texto
+blanco no llega sobre el primero, y con texto oscuro no llega sobre el segundo:
+en la corrida de 2026-09-18, `#e0531f` dio 3.87:1 con blanco y 2.93:1 con
+oscuro. Lo que funciona es oscurecer el acento hasta que el blanco pase sobre
+los dos. El mensaje de la prueba dice qué par falla y cuánto le falta.
 
 ### Las fricciones
 
