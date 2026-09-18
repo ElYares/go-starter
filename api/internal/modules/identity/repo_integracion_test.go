@@ -222,11 +222,64 @@ func catalogoIntacto(t *testing.T, r *Repo) {
 		t.Fatalf("leyendo el catalogo: %v", err)
 	}
 
+	concesiones := filasDeRol(t, r, "role_permissions")
+	ofertas := filasDeRol(t, r, "role_permission_offers")
+
 	t.Cleanup(func() {
 		if err := r.SembrarPermisos(ctx, previos); err != nil {
 			t.Errorf("reponiendo el catalogo: %v", err)
 		}
+		// Resembrar no basta: el catalogo de prueba se llevo por cascada las
+		// ofertas del catalogo real, y la siembra se lo volveria a ofrecer todo
+		// al admin, incluido lo que alguien le quito a proposito en su base.
+		reponerFilasDeRol(t, r, "role_permissions", concesiones)
+		reponerFilasDeRol(t, r, "role_permission_offers", ofertas)
 	})
+}
+
+// filaDeRol es una fila de role_permissions o de role_permission_offers: las
+// dos tablas tienen la misma forma.
+type filaDeRol struct {
+	rol     string
+	permiso string
+}
+
+func filasDeRol(t *testing.T, r *Repo, tabla string) []filaDeRol {
+	t.Helper()
+	rows, err := r.pool.Query(context.Background(),
+		`select role_id::text, permission_key from `+tabla)
+	if err != nil {
+		t.Fatalf("leyendo %s: %v", tabla, err)
+	}
+	filas, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (filaDeRol, error) {
+		var f filaDeRol
+		err := row.Scan(&f.rol, &f.permiso)
+		return f, err
+	})
+	if err != nil {
+		t.Fatalf("leyendo %s: %v", tabla, err)
+	}
+	return filas
+}
+
+func reponerFilasDeRol(t *testing.T, r *Repo, tabla string, filas []filaDeRol) {
+	t.Helper()
+	ctx := context.Background()
+	roles := make([]string, len(filas))
+	permisos := make([]string, len(filas))
+	for i, f := range filas {
+		roles[i], permisos[i] = f.rol, f.permiso
+	}
+	if _, err := r.pool.Exec(ctx, `delete from `+tabla); err != nil {
+		t.Errorf("vaciando %s: %v", tabla, err)
+		return
+	}
+	if _, err := r.pool.Exec(ctx,
+		`insert into `+tabla+` (role_id, permission_key)
+		 select r::uuid, p from unnest($1::text[], $2::text[]) as t(r, p)`,
+		roles, permisos); err != nil {
+		t.Errorf("reponiendo %s: %v", tabla, err)
+	}
 }
 
 // Uno de cada clase, que es lo que hace comprobable el reparto entre los dos
@@ -350,7 +403,6 @@ func TestIntegracionElSuperadminRecibeTodoPermisoDeclarado(t *testing.T) {
 // mismo cualquier permiso, y los dos roles serian el mismo con otro nombre.
 func TestIntegracionElAdminRecibeSoloLosPermisosNoSensibles(t *testing.T) {
 	s, r := servicioReal(t)
-	adminSinConcesiones(t, r)
 	catalogoIntacto(t, r)
 	ctx := context.Background()
 
@@ -379,7 +431,6 @@ func TestIntegracionElAdminRecibeSoloLosPermisosNoSensibles(t *testing.T) {
 // volver en el siguiente despliegue.
 func TestIntegracionLaSiembraNoReponeLoQueSeLeQuitoAlAdmin(t *testing.T) {
 	r := &Repo{pool: pool(t)}
-	adminSinConcesiones(t, r)
 	catalogoIntacto(t, r)
 	ctx := context.Background()
 
@@ -412,45 +463,37 @@ func TestIntegracionLaSiembraNoReponeLoQueSeLeQuitoAlAdmin(t *testing.T) {
 	}
 }
 
-// adminSinConcesiones deja al rol admin vacio mientras dura la prueba, y repone
-// lo que tenia al terminar.
-//
-// Hace falta porque la siembra solo reparte al admin cuando no tiene ninguna
-// concesion, y en una base que ya arranco una vez las tiene. Sin esto, la
-// prueba pasaria en una base recien creada y fallaria en la de cualquiera que
-// ya haya levantado el proyecto.
-func adminSinConcesiones(t *testing.T, r *Repo) {
-	t.Helper()
+// El problema que resolvio la oferta: un modulo que llega a una instalacion que
+// ya arranco. Con la regla anterior —sembrar al admin solo si no tenia nada—
+// sus permisos se quedaban en el superadmin, y la pantalla para concederlos no
+// existia todavia.
+func TestIntegracionElAdminRecibeLosPermisosDeUnModuloNuevo(t *testing.T) {
+	s, r := servicioReal(t)
+	catalogoIntacto(t, r)
 	ctx := context.Background()
 
-	rows, err := r.pool.Query(ctx,
-		`select rp.permission_key from role_permissions rp
-		   join roles ro on ro.id = rp.role_id where ro.key = $1`, RolAdmin)
-	if err != nil {
-		t.Fatalf("leyendo las concesiones del admin: %v", err)
-	}
-	previas, err := pgx.CollectRows(rows, pgx.RowTo[string])
-	rows.Close()
-	if err != nil {
-		t.Fatalf("leyendo las concesiones del admin: %v", err)
+	if err := r.SembrarPermisos(ctx, permisosDePrueba); err != nil {
+		t.Fatalf("primera siembra: %v", err)
 	}
 
-	if _, err := r.pool.Exec(ctx,
-		`delete from role_permissions rp using roles ro
-		  where ro.id = rp.role_id and ro.key = $1`, RolAdmin); err != nil {
-		t.Fatalf("vaciando el rol admin: %v", err)
+	conElNuevo := append(slices.Clone(permisosDePrueba),
+		rbac.Permission{Key: "prueba.integracion.nuevo.usar", Desc: "De un modulo que llega despues"},
+		rbac.Permission{Key: "prueba.integracion.nuevo.repartir", Desc: "Delicado", Sensitive: true})
+	if err := r.SembrarPermisos(ctx, conElNuevo); err != nil {
+		t.Fatalf("siembra con el modulo nuevo: %v", err)
 	}
 
-	t.Cleanup(func() {
-		_, err := r.pool.Exec(context.Background(),
-			`insert into role_permissions (role_id, permission_key)
-			 select ro.id, k from roles ro cross join unnest($2::text[]) as t(k)
-			  where ro.key = $1
-			 on conflict do nothing`, RolAdmin, previas)
-		if err != nil {
-			t.Errorf("reponiendo las concesiones del admin: %v", err)
-		}
-	})
+	admin := crearDePrueba(t, s, r, RolAdmin)
+	actor, err := s.Actor(ctx, admin.ID)
+	if err != nil {
+		t.Fatalf("Actor: %v", err)
+	}
+	if !actor.Can("prueba.integracion.nuevo.usar") {
+		t.Errorf("el admin no recibio el permiso del modulo nuevo; tiene %v", actor.Permissions)
+	}
+	if actor.Can("prueba.integracion.nuevo.repartir") {
+		t.Error("el admin recibio un permiso sensible del modulo nuevo")
+	}
 }
 
 // Un viewer no hereda nada por existir. Es el caso negativo de los dos
