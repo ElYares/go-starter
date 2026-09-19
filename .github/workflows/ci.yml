@@ -198,6 +198,9 @@ jobs:
       - name: Scripts de modulos
         working-directory: .
         run: ./scripts/nuevo-modulo.test.sh
+      - name: Traer mejoras del starter
+        working-directory: .
+        run: ./scripts/enlazar-starter.test.sh
 
       # Y la receta de verdad, sobre este checkout.
       - name: Agregar un modulo desde _template
