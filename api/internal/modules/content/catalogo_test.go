@@ -107,3 +107,30 @@ func TestSoloLaUnicidadDelSlugSeTraduceASlugOcupado(t *testing.T) {
 		t.Error("un numero de version repetido salio como slug ocupado")
 	}
 }
+
+// El enlace del hero es un href en la portada. `//otro.com` empieza por `/`
+// pero lleva a otro sitio, y el navegador trata `/\otro.com` y una barra
+// seguida de tabulador igual que `//`: los tres son un redireccionamiento
+// abierto con el dominio del sitio. Es la misma regla que el menu y el pie.
+func TestElEnlaceDelHeroSoloPuedeSerUnaRutaDelSitioOHttps(t *testing.T) {
+	cat, _ := cargarCatalogo(bloquesFS)
+	hero := func(href string) []Bloque {
+		return []Bloque{{Id: "b1", Type: "hero", Props: map[string]interface{}{
+			"title": "Hola", "cta": map[string]interface{}{"label": "Ir", "href": href},
+		}}}
+	}
+
+	malos := []string{"//otro.com", `/\otro.com`, "/\t/otro.com", "/\n/otro.com", "http://otro.com",
+		"javascript:alert(1)", "data:text/html,x", "precios", ""}
+	for _, href := range malos {
+		if problemas := cat.validar(hero(href)); len(problemas) != 1 || problemas[0].Field != "blocks[0].props.cta.href" {
+			t.Errorf("%q: problemas = %+v", href, problemas)
+		}
+	}
+
+	for _, href := range []string{"/", "/admin", "/precios#planes", "/a//b", "https://otro.com"} {
+		if problemas := cat.validar(hero(href)); len(problemas) != 0 {
+			t.Errorf("%q: se rechazo: %+v", href, problemas)
+		}
+	}
+}

@@ -28,7 +28,7 @@
           "description": "Una ruta del sitio, como /precios, o una direccion que empiece con https://",
           "type": "string",
           "maxLength": 500,
-          "pattern": "^(/([^/]|$)|https://)"
+          "pattern": "^(/([^/\\\\\\s]|$)|https://)"
         }
       }
     }

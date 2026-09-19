@@ -143,9 +143,14 @@ func TestSinNombreLaMarcaEs400EnValueNameYNoSeEscribe(t *testing.T) {
 }
 
 // Un enlace `javascript:` en el menu es un XSS en cada pagina de la landing. Y
-// `//otro.com` empieza por `/` pero lleva a otro sitio.
+// `//otro.com` empieza por `/` pero lleva a otro sitio; el navegador trata
+// `/\otro.com` y una barra seguida de tabulador igual.
+//
+// Los malos van escritos como fragmento de JSON, porque se pegan dentro de uno:
+// `/\\otro.com` es la cadena `/\otro.com`.
 func TestUnEnlaceSoloPuedeSerUnaRutaDelSitioOHttps(t *testing.T) {
-	malos := []string{"javascript:alert(1)", "JAVASCRIPT:alert(1)", "//otro.com", "http://otro.com", "data:text/html,x", "precios"}
+	malos := []string{"javascript:alert(1)", "JAVASCRIPT:alert(1)", "//otro.com", "http://otro.com", "data:text/html,x", "precios",
+		`/\\otro.com`, `/\t/otro.com`}
 	buenos := []string{"/", "/precios", "/precios#planes", "https://otro.com"}
 
 	for _, href := range malos {

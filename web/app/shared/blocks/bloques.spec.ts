@@ -25,6 +25,16 @@ describe('HeroBlock', () => {
     expect(cta.text()).toBe('Entrar')
   })
 
+  // Una fila escrita a mano en la base no pasa por el esquema. Antes que mandar
+  // a quien visita la portada a otro dominio, el boton no se pinta.
+  it('un enlace que lleva a otro sitio no se pinta', () => {
+    for (const href of ['//otro.com', '/\\otro.com', 'javascript:alert(1)']) {
+      const hero = mount(HeroBlock, { props: { contenido: { title: 'Hola', cta: { label: 'Ir', href } } } })
+      expect(hero.find('a').exists(), href).toBe(false)
+      expect(hero.find('h1').text()).toBe('Hola')
+    }
+  })
+
   it('lo opcional del esquema no deja elementos vacios', () => {
     const hero = mount(HeroBlock, { props: { contenido: { title: 'Solo titulo' } } })
     expect(hero.find('.bajada').exists()).toBe(false)
