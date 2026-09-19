@@ -27,6 +27,7 @@ const visibles = computed(() => seccionesVisibles(props.perfil.permissions, prop
       <span class="marca">go-starter</span>
       <div class="sesion">
         <span class="quien">Sesion de {{ perfil.displayName }}</span>
+        <RouterLink to="/admin/contrasena" class="mi-contrasena">Mi contrasena</RouterLink>
         <BaseButton variant="secondary" size="sm" :loading="saliendo" @click="$emit('salir')">
           Cerrar sesion
         </BaseButton>
@@ -73,6 +74,10 @@ const visibles = computed(() => seccionesVisibles(props.perfil.permissions, prop
   display: flex;
   align-items: center;
   gap: var(--space-3);
+}
+.mi-contrasena {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 .quien {
   color: var(--color-text-muted);

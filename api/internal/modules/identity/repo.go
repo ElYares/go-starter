@@ -18,7 +18,7 @@ import (
 //
 // password_hash no esta: sale solo por la consulta de autenticacion, que lo
 // pide aparte y con nombre. Asi no puede colarse en un listado por descuido.
-const columnas = `id, email, display_name, enabled, dev_seed, version, created_at, updated_at, updated_by`
+const columnas = `id, email, display_name, enabled, dev_seed, must_change_password, version, created_at, updated_at, updated_by`
 
 type Repo struct {
 	pool *pgxpool.Pool
@@ -418,7 +418,7 @@ func escanear(row pgx.CollectableRow) (Usuario, error) {
 // agregar una columna a la proyeccion obligue a tocar un solo sitio: la
 // consulta de autenticacion escanea lo mismo mas el hash.
 func destinos(u *Usuario) []any {
-	return []any{&u.ID, &u.Email, &u.DisplayName, &u.Enabled, &u.DevSeed, &u.Version,
+	return []any{&u.ID, &u.Email, &u.DisplayName, &u.Enabled, &u.DevSeed, &u.MustChangePassword, &u.Version,
 		&u.CreatedAt, &u.UpdatedAt, &u.UpdatedBy}
 }
 

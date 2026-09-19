@@ -41,6 +41,12 @@ type repositorio interface {
 	editar(ctx context.Context, id string, version int, m ModificacionDeUsuario) (Usuario, error)
 	habilitar(ctx context.Context, userID string) (Usuario, error)
 	catalogoDeRoles(ctx context.Context, p paging.Params) ([]RolConPermisos, int64, error)
+
+	// Las de la contrasena temporal (HU-019). Ver repo_contrasena.go.
+	pedirContrasena(ctx context.Context, id, email, ip, userAgent string) error
+	asignarContrasena(ctx context.Context, actorID, userID, hash string) error
+	cambiarContrasena(ctx context.Context, userID, hash string) error
+	solicitudes(ctx context.Context, p paging.Params) ([]SolicitudPendiente, int64, error)
 }
 
 type Service struct {
@@ -198,6 +204,14 @@ func (s *Service) Actor(ctx context.Context, userID string) (rbac.Actor, error) 
 		return rbac.Actor{}, errSinAcceso
 	}
 
+	// Con una contrasena temporal, sesion si y permisos no: puede leer `me` y
+	// cambiarla (rutas de solo sesion), y nada mas. Se impone aqui y no solo en
+	// el dashboard, que es conveniencia: quien la asigno la conoce, y hasta que
+	// la cuenta elija la suya no deberia servir para operar el sitio.
+	if u.MustChangePassword {
+		return rbac.Actor{ID: userID}, nil
+	}
+
 	permisos, err := s.repo.permisosDe(ctx, userID)
 	if err != nil {
 		return rbac.Actor{}, err
@@ -283,6 +297,9 @@ func traducirEstado(err error) error {
 	case errors.Is(err, errVersion):
 		return httpx.Conflict(
 			"La cuenta cambio despues de que la leiste. Vuelve a cargarla y repite el cambio")
+	case errors.Is(err, errMasPoder):
+		return httpx.New(http.StatusForbidden, httpx.CodeForbidden, "Sin permiso",
+			"Esa cuenta tiene permisos que tu no tienes. Pidele a un superadmin que le asigne la contrasena")
 	case errors.Is(err, errUltimoSuperadmin):
 		return httpx.Conflict(
 			"Es el ultimo superadmin habilitado. Dale el rol a alguien mas antes de quitarselo a este")
@@ -323,6 +340,31 @@ func (s *Service) IniciarSesion(ctx context.Context, in IntentoDeSesion) (Sesion
 		return Sesion{}, err
 	}
 
+	sesion, err := s.emitir(ctx, u, in.IP, in.UserAgent)
+	if err != nil {
+		return Sesion{}, err
+	}
+
+	// Al final y no antes: limpiar el contador de alguien que todavia no
+	// termino de entrar le daria intentos gratis a quien provoque un fallo
+	// justo despues de acertar la contrasena.
+	//
+	// Y SOLO el del correo. Un login bueno demuestra quien es la persona de esa
+	// cuenta, no quien esta detras de la IP: si limpiara tambien la IP, quien
+	// tenga una cuenta propia probaria diecinueve correos ajenos, entraria con
+	// la suya para vaciar el contador y volveria a empezar, y el tope por IP no
+	// frenaria nada.
+	s.intentos.Exito(correo)
+
+	return sesion, nil
+}
+
+// emitir abre una sesion para alguien que ya demostro quien es: el login, y
+// cambiar la propia contrasena, que revoca las demas y deja viva esta.
+//
+// El refresh se guarda ANTES de devolver la sesion, asi que no puede haber un
+// `rt` en el navegador que no exista en la base.
+func (s *Service) emitir(ctx context.Context, u Usuario, ip, userAgent string) (Sesion, error) {
 	roles, err := s.repo.rolesDe(ctx, u.ID)
 	if err != nil {
 		return Sesion{}, err
@@ -353,22 +395,11 @@ func (s *Service) IniciarSesion(ctx context.Context, in IntentoDeSesion) (Sesion
 		UserID:    u.ID,
 		TokenHash: auth.HashDeRefresh(rt),
 		ExpiraEn:  time.Now().Add(auth.VidaDelRefreshToken),
-		UserAgent: in.UserAgent,
-		IP:        in.IP,
+		UserAgent: userAgent,
+		IP:        ip,
 	}); err != nil {
 		return Sesion{}, err
 	}
-
-	// Al final y no antes: limpiar el contador de alguien que todavia no
-	// termino de entrar le daria intentos gratis a quien provoque un fallo
-	// justo despues de acertar la contrasena.
-	//
-	// Y SOLO el del correo. Un login bueno demuestra quien es la persona de esa
-	// cuenta, no quien esta detras de la IP: si limpiara tambien la IP, quien
-	// tenga una cuenta propia probaria diecinueve correos ajenos, entraria con
-	// la suya para vaciar el contador y volveria a empezar, y el tope por IP no
-	// frenaria nada.
-	s.intentos.Exito(correo)
 
 	return Sesion{Usuario: u, Roles: roles, AccessToken: at, RefreshToken: rt, TokenCSRF: csrf}, nil
 }
@@ -408,6 +439,12 @@ func (s *Service) Perfil(ctx context.Context, userID string) (PerfilDeUsuario, e
 	roles, err := s.repo.rolesDe(ctx, userID)
 	if err != nil {
 		return PerfilDeUsuario{}, err
+	}
+
+	// Con contrasena temporal, `me` dice lo mismo que Actor: ningun permiso. Si
+	// dijera los del rol, el dashboard ofreceria pantallas que responden 403.
+	if u.MustChangePassword {
+		return PerfilDeUsuario{Usuario: u, Roles: roles}, nil
 	}
 
 	permisos, err := s.repo.permisosDe(ctx, userID)

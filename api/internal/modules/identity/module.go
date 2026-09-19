@@ -61,7 +61,7 @@ func (m *Module) Service() *Service { return m.svc }
 func (m *Module) Name() string { return "identity" }
 
 func (m *Module) Permissions() []rbac.Permission {
-	// Los cuatro van marcados como sensibles: son los que reparten poder en vez
+	// Los cuatro primeros van marcados como sensibles: son los que reparten poder en vez
 	// de usarlo. Quien pueda asignar roles puede darse a si mismo cualquier
 	// permiso, asi que concederlos al rol `admin` haria de `admin` un
 	// superadmin con otro nombre y la separacion no separaria nada.
@@ -70,6 +70,11 @@ func (m *Module) Permissions() []rbac.Permission {
 		{Key: "identity.user.write", Desc: "Crear cuentas, cambiar sus datos y deshabilitarlas", Sensitive: true},
 		{Key: "identity.role.read", Desc: "Ver los roles y que permisos concede cada uno", Sensitive: true},
 		{Key: "identity.role.assign", Desc: "Asignar y quitar roles a una cuenta", Sensitive: true},
+		// Este NO es sensible, y por eso lo recibe el admin: asignar una
+		// contrasena temporal es poder entrar como esa cuenta, pero la regla de
+		// poder (repo_contrasena.go) impide hacerlo con quien tenga algun permiso
+		// que el actor no tenga. Asi no se reparte poder que no se tenga ya.
+		{Key: "identity.user.password", Desc: "Ver las solicitudes de contrasena y asignar contrasenas temporales a cuentas con menos poder"},
 	}
 }
 
@@ -130,6 +135,16 @@ func (m *Module) Routes(r *httpx.Router) {
 		// Sesion y nada mas: todo el mundo puede leer su propio perfil, asi que
 		// no hay permiso con nombre que pedir. Ver rbac.RequireSession.
 		r.Get("/me", w.MiPerfil, rbac.RequireSession())
+
+		// Sin guard, como el login: quien olvido su contrasena no tiene sesion.
+		// Lo protegen el CSRF de la cadena global y el tope de /auth (HU-010), y
+		// responde igual exista o no la cuenta. Excepcion escrita en la prueba de
+		// contrato de app.
+		r.Post("/password-reset", w.PedirContrasena)
+
+		// Solo sesion: una cuenta con contrasena temporal no resuelve permisos,
+		// y es justo la que tiene que llegar aqui.
+		r.Post("/password", w.CambiarContrasena, rbac.RequireSession())
 	})
 
 	// Sobre la seccion 8 del molde —"el usuario A recibe 404 sobre un recurso
@@ -149,6 +164,7 @@ func (m *Module) Routes(r *httpx.Router) {
 			r.Post("/{id}/enable", w.HabilitarCuenta, rbac.Require("identity.user.write"))
 			r.Put("/{id}/roles/{role}", w.AsignarRol, rbac.Require("identity.role.assign"))
 			r.Delete("/{id}/roles/{role}", w.QuitarRol, rbac.Require("identity.role.assign"))
+			r.Post("/{id}/password", w.AsignarContrasena, rbac.Require("identity.user.password"))
 
 			// DELETE no existe: deshabilitar es la baja. Borrar la fila dejaria
 			// `created_by` y `updated_by` de todo lo que hizo esa persona
@@ -156,6 +172,7 @@ func (m *Module) Routes(r *httpx.Router) {
 		})
 
 		r.Get("/roles", w.ListarRoles, rbac.Require("identity.role.read"))
+		r.Get("/password-resets", w.ListarSolicitudes, rbac.Require("identity.user.password"))
 	})
 }
 
@@ -226,8 +243,9 @@ func (m *Module) MiPerfil(w http.ResponseWriter, r *http.Request) {
 		// `[]string{}` y no el slice tal cual: una lista vacia tiene que salir
 		// como `[]` y jamas como `null`. Un cliente que hace `.includes()` sobre
 		// null revienta, y el contrato promete un array.
-		Roles:       oVacio(perfil.Roles),
-		Permissions: oVacio(perfil.Permisos),
+		Roles:              oVacio(perfil.Roles),
+		Permissions:        oVacio(perfil.Permisos),
+		MustChangePassword: perfil.Usuario.MustChangePassword,
 	})
 }
 

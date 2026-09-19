@@ -16,6 +16,7 @@ const ana = (extra: Partial<Schemas['Cuenta']> = {}): Schemas['Cuenta'] => ({
   email: 'ana@casa.com',
   displayName: 'Ana',
   enabled: true,
+  mustChangePassword: false,
   roles: ['staff'],
   version: 3,
   createdAt: '2026-09-18T10:00:00Z',
@@ -225,6 +226,36 @@ describe('FichaDeCuenta', () => {
     expect(w.text()).toContain('El servidor no responde')
     expect(w.text()).toContain('traza-9')
     expect(boton(w, 'Reintentar')).toBeDefined()
+  })
+
+  it('asignar contrasena solo aparece con el permiso y no en la cuenta propia', async () => {
+    const asignarContrasena = vi.fn(async () => {})
+    const con = montar({ asignarContrasena })
+    await flushPromises()
+    expect(con.find('[data-grupo="contrasena"]').exists()).toBe(true)
+
+    const propia = montar({ asignarContrasena, esPropia: true })
+    await flushPromises()
+    expect(propia.find('[data-grupo="contrasena"]').exists()).toBe(false)
+
+    const sin = montar()
+    await flushPromises()
+    expect(sin.find('[data-grupo="contrasena"]').exists()).toBe(false)
+  })
+
+  it('asignarla marca la cuenta como temporal', async () => {
+    const asignarContrasena = vi.fn(async () => {})
+    const w = montar({ asignarContrasena })
+    await flushPromises()
+    expect(w.find('[data-insignia="temporal"]').exists()).toBe(false)
+
+    await boton(w, 'Asignar contrasena temporal')!.trigger('click')
+    await flushPromises()
+    botonExacto('Asignar')!.click()
+    await flushPromises()
+
+    expect(asignarContrasena).toHaveBeenCalledOnce()
+    expect(w.find('[data-insignia="temporal"]').exists()).toBe(true)
   })
 
   it('carga con esqueleto', () => {

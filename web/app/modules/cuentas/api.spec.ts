@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ClienteApi } from '~/shared/api/client'
-import { darRol, deshabilitarCuenta, guardarCuenta, habilitarCuenta, listarCuentas, quitarRol } from './api'
+import { asignarContrasena, darRol, deshabilitarCuenta, guardarCuenta, habilitarCuenta, listarCuentas, listarSolicitudes, quitarRol } from './api'
 
 function clienteFalso(): ClienteApi {
   return {
@@ -40,5 +40,13 @@ describe('las operaciones de cuentas', () => {
     await quitarRol(api, 'u1', 'staff')
     expect(api.put).toHaveBeenCalledWith('/users/u1/roles/jefe%20de%20sala', undefined, { sinVersion: true })
     expect(api.delete).toHaveBeenCalledWith('/users/u1/roles/staff')
+  })
+
+  it('asignar una temporal manda solo la contrasena, y las solicitudes piden el tope', async () => {
+    const api = clienteFalso()
+    await asignarContrasena(api, 'u1', 'una temporal bien larga')
+    await listarSolicitudes(api)
+    expect(api.post).toHaveBeenCalledWith('/users/u1/password', { password: 'una temporal bien larga' })
+    expect(api.get).toHaveBeenCalledWith('/password-resets?size=100')
   })
 })

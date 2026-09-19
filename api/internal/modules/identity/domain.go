@@ -34,7 +34,10 @@ type Usuario struct {
 	Enabled     bool
 	// DevSeed marca al admin que crea `cmd/seed`. Ver Service.Autenticar.
 	DevSeed bool
-	Version int
+	// MustChangePassword marca una contrasena temporal que asigno otra
+	// persona (HU-019). Ver Service.Actor.
+	MustChangePassword bool
+	Version            int
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -57,6 +60,16 @@ type UsuarioConRoles struct {
 type ModificacionDeUsuario struct {
 	Email       string
 	DisplayName string
+}
+
+// SolicitudPendiente es un pedido de contrasena que nadie atendio todavia, con
+// lo que hace falta para reconocer la cuenta sin identity.user.read.
+type SolicitudPendiente struct {
+	ID          string
+	UserID      string
+	Email       string
+	DisplayName string
+	CreatedAt   time.Time
 }
 
 // RolConPermisos es un rol visto desde la pantalla de roles. Los permisos son
@@ -86,6 +99,11 @@ var (
 	// deshabilitada, o la sembrada fuera de desarrollo. No llega al cliente
 	// como tal; ver Service.Actor.
 	errSinAcceso = errors.New("identity: la cuenta no tiene acceso")
+
+	// errMasPoder: la cuenta a la que se le quiere asignar una contrasena tiene
+	// algun permiso que quien la asigna no tiene. Asignarsela seria poder
+	// entrar como ella, es decir, darse esos permisos.
+	errMasPoder = errors.New("identity: la cuenta tiene permisos que el actor no tiene")
 )
 
 // Validacion. Vive aqui y no solo en el contrato porque el contrato declara la

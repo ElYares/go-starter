@@ -49,6 +49,10 @@ type repoFalso struct {
 	errAlQuitarRol      error
 	errAlDeshabilitar   error
 	errAlGuardarRefresh error
+	errAlAsignar        error
+
+	// pendientes son las solicitudes de contrasena (HU-019).
+	pendientes []SolicitudPendiente
 
 	// refresh son las filas de `refresh_tokens`, por id, con su hash. Imitan el
 	// estado que el refresh lee y escribe; ver refresh_falso_test.go.

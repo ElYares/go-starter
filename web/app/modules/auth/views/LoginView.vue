@@ -2,6 +2,7 @@
 import LoginForm from '../components/LoginForm.vue'
 import { useSesion } from '../composables/useSesion'
 import { destinoSeguro, iniciarSesion, type Credenciales } from '../sesion'
+import { RUTA_PEDIR_CONTRASENA } from '../contrasena'
 import { useApi } from '~/shared/api/useApi'
 
 useHead({ title: 'Entrar · go-starter' })
@@ -23,6 +24,7 @@ async function entrar(credenciales: Credenciales) {
       <h1>Entrar</h1>
       <p class="pista">Accede al dashboard para editar la landing.</p>
       <LoginForm :entrar="entrar" />
+      <NuxtLink :to="RUTA_PEDIR_CONTRASENA" class="olvido">¿Olvidaste tu contrasena?</NuxtLink>
     </section>
   </main>
 </template>
@@ -45,6 +47,12 @@ async function entrar(credenciales: Credenciales) {
 h1 {
   margin: 0;
   font-size: var(--text-lg);
+}
+.olvido {
+  display: inline-block;
+  margin-top: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 .pista {
   margin: var(--space-1) 0 var(--space-6);

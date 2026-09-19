@@ -35,6 +35,12 @@ describe('seccionesVisibles', () => {
     expect(seccionesVisibles(['identity.user.write', 'identity.role.assign']).map((s) => s.ruta)).toEqual(['/admin'])
   })
 
+  // HU-019: las solicitudes las atiende quien puede asignar contrasenas, que
+  // tambien es el admin.
+  it('con identity.user.password aparecen las solicitudes', () => {
+    expect(seccionesVisibles(['identity.user.password']).map((s) => s.ruta)).toEqual(['/admin', '/admin/solicitudes'])
+  })
+
   // `modulo.accion` o `modulo.recurso.accion`, como los declara el api
   // (settings.read, content.page.read). Un permiso mal escrito aqui oculta la
   // entrada a todo el mundo sin un error.

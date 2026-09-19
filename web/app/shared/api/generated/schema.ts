@@ -164,6 +164,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pedir que asignen una contrasena temporal
+         * @description Deja una solicitud pendiente que ven quienes tienen
+         *     `identity.user.password`. No manda correos: el starter no envia
+         *     ninguno, y la contrasena temporal se entrega por fuera.
+         *
+         *     **Responde `202` y el mismo cuerpo exista o no la cuenta**, este o no
+         *     deshabilitada: distinguirlos haria de este formulario un oraculo de que
+         *     correos estan registrados. Pedirlo otra vez con una solicitud pendiente
+         *     no crea otra.
+         *
+         *     `security: []` como el login, y exige `X-XSRF-TOKEN` como toda
+         *     mutacion. Le aplica el tope de `/auth` (HU-010).
+         */
+        post: operations["pedirContrasena"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cambiar la propia contrasena
+         * @description Pide la actual y la nueva. Si la cuenta tenia una contrasena temporal,
+         *     deja de tenerla. **Revoca las demas sesiones** y emite cookies nuevas
+         *     para esta, igual que el login: quien cambia su contrasena porque
+         *     sospecha de otra sesion la tiene que ver caer.
+         *
+         *     Solo sesion, sin permiso con nombre: una cuenta con contrasena temporal
+         *     no resuelve permisos hasta cambiarla, y es justo la que llega aqui.
+         */
+        post: operations["cambiarContrasena"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/public/settings": {
         parameters: {
             query?: never;
@@ -648,6 +704,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/users/{id}/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["CuentaId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Asignar una contrasena temporal
+         * @description La cuenta queda con **contrasena temporal**: al entrar no resuelve
+         *     ningun permiso hasta elegir la suya. Se revocan sus sesiones y se dan
+         *     por atendidas sus solicitudes pendientes.
+         *
+         *     **Nadie resetea a quien tiene mas poder:** si la cuenta tiene algun
+         *     permiso que quien pide no tiene, `403`. El admin no puede con el
+         *     superadmin; el superadmin puede con cualquiera. Resetearse a uno mismo
+         *     por aqui es `409`: para eso esta `POST /auth/password`.
+         */
+        post: operations["asignarContrasena"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/password-resets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar las solicitudes de contrasena pendientes
+         * @description Las que dejo `POST /auth/password-reset` y nadie atendio todavia, de la
+         *     mas vieja a la mas nueva. Trae correo y nombre de la cuenta: quien las
+         *     atiende puede no tener `identity.user.read`.
+         */
+        get: operations["listarSolicitudes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/roles": {
         parameters: {
             query?: never;
@@ -716,6 +823,11 @@ export interface components {
             id: string;
             /** @example superadmin@go-starter.localhost */
             email: string;
+            /**
+             * @description La cuenta entro con una contrasena temporal que asigno otra persona.
+             *     Hasta cambiarla no resuelve ningun permiso: `permissions` sale vacio.
+             */
+            mustChangePassword: boolean;
             /** @example Superadmin de desarrollo */
             displayName: string;
             /**
@@ -1020,6 +1132,8 @@ export interface components {
             /** @example Ana */
             displayName: string;
             enabled: boolean;
+            /** @description Tiene una contrasena temporal que todavia no cambio. */
+            mustChangePassword: boolean;
             /**
              * @description Las claves de sus roles. Sin roles es `[]`, jamas `null`.
              * @example [
@@ -1085,6 +1199,40 @@ export interface components {
         /** @description El envoltorio de coleccion. Ver `SettingsPage`. */
         RolesPage: {
             content: components["schemas"]["Rol"][];
+            page: components["schemas"]["PageMeta"];
+        };
+        PedidoDeContrasena: {
+            /** @example ana@casa.com */
+            email: string;
+        };
+        /** @description El mismo cuerpo exista o no la cuenta. */
+        PedidoRecibido: {
+            /** @example Si la cuenta existe, quien administra el sitio vera tu solicitud. */
+            message: string;
+        };
+        CambioDeContrasena: {
+            /** Format: password */
+            currentPassword: string;
+            /** Format: password */
+            newPassword: string;
+        };
+        ContrasenaTemporal: {
+            /** Format: password */
+            password: string;
+        };
+        Solicitud: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            userId: string;
+            email: string;
+            displayName: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /** @description El envoltorio de coleccion. Ver `SettingsPage`. */
+        SolicitudesPage: {
+            content: components["schemas"]["Solicitud"][];
             page: components["schemas"]["PageMeta"];
         };
         /**
@@ -1412,6 +1560,70 @@ export interface operations {
                 };
                 content?: never;
             };
+            403: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    pedirContrasena: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description El valor de la cookie `XSRF-TOKEN`, reenviado a mano. Es el doble envio:
+                 *     quien no puede leer la cookie —otro origen— no puede forjar la cabecera.
+                 *
+                 *     Se declara aqui, y no solo en el middleware, para que el cliente
+                 *     generado sepa que la operacion la necesita.
+                 * @example 8f14e45fceea167a5a36dedd4bea2543
+                 */
+                "X-XSRF-TOKEN": components["parameters"]["XsrfToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PedidoDeContrasena"];
+            };
+        };
+        responses: {
+            /** @description Recibido. Siempre el mismo cuerpo */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PedidoRecibido"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    cambiarContrasena: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CambioDeContrasena"];
+            };
+        };
+        responses: {
+            /** @description Cambiada. Las cookies nuevas van en `Set-Cookie` */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
         };
@@ -2241,6 +2453,69 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    asignarContrasena: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["CuentaId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContrasenaTemporal"];
+            };
+        };
+        responses: {
+            /** @description Asignada */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    listarSolicitudes: {
+        parameters: {
+            query?: {
+                /** @description Numero de pagina, base 0. */
+                page?: components["parameters"]["Page"];
+                /**
+                 * @description Tamano de pagina. El tope es **duro**: pedir mas devuelve 100 y
+                 *     `page.size` reporta el efectivo. Sin el, `?size=1000000` seria una
+                 *     negacion de servicio de una linea.
+                 */
+                size?: components["parameters"]["Size"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Una pagina de solicitudes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolicitudesPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
         };
     };

@@ -83,9 +83,10 @@ func (r *repoFalso) catalogoDeRoles(_ context.Context, p paging.Params) ([]RolCo
 
 // --- las peticiones ---------------------------------------------------------
 
-// todosLosPermisos es el superadmin: los cuatro de identity.
+// todosLosPermisos es el superadmin: los de identity.
 var todosLosPermisos = []string{
 	"identity.user.read", "identity.user.write", "identity.role.read", "identity.role.assign",
+	"identity.user.password",
 }
 
 func con(permisos ...string) *rbac.Actor {
@@ -153,7 +154,7 @@ func anaEnElModulo(t *testing.T) (*Module, *repoFalso, Usuario) {
 
 // --- autorizacion -------------------------------------------------------------
 
-// Las ocho rutas con el permiso que piden. Sin sesion, 401; con sesion y todos
+// Las rutas con el permiso que piden. Sin sesion, 401; con sesion y todos
 // los permisos MENOS ese, 403. Lo segundo es lo que detecta una ruta montada
 // con el permiso equivocado: con un actor sin ningun permiso, pedir el de al
 // lado tambien daria 403.
@@ -169,6 +170,8 @@ var rutasDeCuentas = []struct {
 	{http.MethodPut, "/api/v1/users/0192a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b/roles/staff", "", "identity.role.assign"},
 	{http.MethodDelete, "/api/v1/users/0192a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b/roles/staff", "", "identity.role.assign"},
 	{http.MethodGet, "/api/v1/roles", "", "identity.role.read"},
+	{http.MethodPost, "/api/v1/users/0192a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b/password", `{"password":"una temporal bien larga"}`, "identity.user.password"},
+	{http.MethodGet, "/api/v1/password-resets", "", "identity.user.password"},
 }
 
 func TestCadaRutaDeCuentasSinSesionEs401(t *testing.T) {

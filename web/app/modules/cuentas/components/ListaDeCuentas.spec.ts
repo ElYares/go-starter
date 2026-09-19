@@ -16,6 +16,7 @@ const cuenta = (email: string, extra: Partial<Schemas['Cuenta']> = {}): Schemas[
   email,
   displayName: email.split('@')[0]!.toUpperCase(),
   enabled: true,
+  mustChangePassword: false,
   roles: [],
   version: 1,
   createdAt: '2026-09-18T10:00:00Z',
@@ -127,9 +128,9 @@ describe('ListaDeCuentas', () => {
 
     escribir('[data-campo="displayName"]', 'Cris')
     escribir('[data-campo="email"]', 'cris@casa.com')
-    escribir('[data-campo="password"]', 'una clave larga de verdad')
+    escribir('[data-campo="password"] input', 'una clave larga de verdad')
     await flushPromises()
-    expect(enDocumento('[data-campo="password"]')!.type).toBe('password')
+    expect(enDocumento('[data-campo="password"] input')!.type).toBe('password')
 
     botonEnDocumento('Crear cuenta')!.click()
     await flushPromises()
@@ -149,7 +150,7 @@ describe('ListaDeCuentas', () => {
     await flushPromises()
 
     expect(document.body.textContent).toContain('El minimo es 12 caracteres')
-    expect(enDocumento('[data-campo="password"]')!.getAttribute('aria-invalid')).toBe('true')
+    expect(enDocumento('[data-campo="password"] input')!.getAttribute('aria-invalid')).toBe('true')
     expect(w.emitted('creada')).toBeUndefined()
   })
 

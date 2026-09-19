@@ -125,6 +125,25 @@ Quitárselo al único que lo tiene es una operación normal, y bloquearla sería
 - El tipo de cable se llama `Cuenta` y no `Usuario`: el código generado vive en
   el paquete `identity`, donde `Usuario` ya es el tipo del dominio
 
+### Contraseña temporal (HU-019)
+
+- **Pedir:** `POST /auth/password-reset`, sin sesión, desde "¿Olvidaste tu
+  contraseña?" del login. Deja una fila en `password_reset_requests` y responde
+  `202` con el mismo cuerpo exista o no la cuenta. Es **una** sentencia
+  (`insert … select … where email = $1 and enabled on conflict do nothing`), y
+  un índice único parcial deja una sola pendiente por cuenta. No se envían
+  correos: la temporal se entrega por fuera
+- **Asignar:** `POST /users/{id}/password` con `identity.user.password`, que
+  **no es sensible** y por eso lo recibe el admin. Lo que lo hace seguro es la
+  **regla de poder**, en el `WHERE` de la sentencia que escribe: la cuenta no
+  puede tener ningún permiso que el actor no tenga (`403` si lo tiene). El admin
+  no puede con el superadmin. Asignar deja `must_change_password`, revoca sus
+  sesiones y da por atendidas sus solicitudes, en una transacción
+- **Temporal:** con `must_change_password`, `Service.Actor` no resuelve ningún
+  permiso y `me` los devuelve vacíos: la cuenta solo puede cambiarla
+  (`POST /auth/password`, solo sesión). Cambiarla revoca todas sus sesiones y
+  emite cookies nuevas para la actual
+
 ## Contenido: la landing editable (`modules/content`)
 
 Este es el corazón del starter. La landing **no vive en el código**: vive en la

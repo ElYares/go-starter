@@ -170,14 +170,15 @@ func aCuenta(u UsuarioConRoles) (Cuenta, error) {
 	}
 
 	return Cuenta{
-		Id:          id,
-		Email:       u.Email,
-		DisplayName: u.DisplayName,
-		Enabled:     u.Enabled,
-		Roles:       oVacio(u.Roles),
-		Version:     u.Version,
-		CreatedAt:   u.CreatedAt,
-		UpdatedAt:   u.UpdatedAt,
-		UpdatedBy:   por,
+		Id:                 id,
+		Email:              u.Email,
+		DisplayName:        u.DisplayName,
+		Enabled:            u.Enabled,
+		MustChangePassword: u.MustChangePassword,
+		Roles:              oVacio(u.Roles),
+		Version:            u.Version,
+		CreatedAt:          u.CreatedAt,
+		UpdatedAt:          u.UpdatedAt,
+		UpdatedBy:          por,
 	}, nil
 }
