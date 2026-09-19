@@ -507,6 +507,168 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar las cuentas
+         * @description Sigue el molde de coleccion de `docs/04-reglas-de-crud.md` seccion 3.
+         *     Cada fila lleva sus roles. Ninguna respuesta de este recurso trae el
+         *     hash de la contrasena, ni siquiera un indicio de el.
+         */
+        get: operations["listarCuentas"];
+        put?: never;
+        /**
+         * Dar de alta una cuenta
+         * @description La cuenta nace habilitada y **sin roles**: repartirlos pide
+         *     `identity.role.assign`, que es otro permiso. Un correo repetido —tambien
+         *     en otras mayusculas— es `409`.
+         */
+        post: operations["crearCuenta"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["CuentaId"];
+            };
+            cookie?: never;
+        };
+        /** Leer una cuenta con sus roles */
+        get: operations["leerCuenta"];
+        /**
+         * Cambiar el correo y el nombre de una cuenta
+         * @description Solo correo y nombre. La contrasena, los roles y si esta habilitada
+         *     tienen su propia operacion, y mandarlos aqui es `400`: un `PUT` que los
+         *     aceptara haria de `identity.user.write` un permiso para repartir roles.
+         *
+         *     `If-Match` es **obligatorio**; si alguien guardo en medio, `409`.
+         */
+        put: operations["guardarCuenta"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["CuentaId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deshabilitar una cuenta
+         * @description La cuenta deja de entrar **al instante**: sus sesiones se revocan en la
+         *     misma transaccion, y un `at` suyo que siga vigente ya no resuelve
+         *     permisos. Deshabilitar una cuenta ya deshabilitada es el mismo estado,
+         *     no un error.
+         *
+         *     El ultimo superadmin habilitado no se puede deshabilitar: `409`.
+         */
+        post: operations["deshabilitarCuenta"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["CuentaId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Volver a habilitar una cuenta
+         * @description Vuelve a poder iniciar sesion con la contrasena que tenia. Habilitar una
+         *     cuenta habilitada es el mismo estado, no un error.
+         */
+        post: operations["habilitarCuenta"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}/roles/{role}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["CuentaId"];
+                /**
+                 * @description La clave del rol, por ejemplo `admin`.
+                 * @example admin
+                 */
+                role: components["parameters"]["RolKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Darle un rol a una cuenta
+         * @description Idempotente: darle un rol que ya tiene es el mismo estado. Un rol que no
+         *     existe es `404`.
+         */
+        put: operations["asignarRol"];
+        post?: never;
+        /**
+         * Quitarle un rol a una cuenta
+         * @description Un rol que la cuenta no tiene es `404`. Quitarle `superadmin` al ultimo
+         *     habilitado es `409`.
+         *
+         *     No revoca sesiones: los permisos se resuelven en cada peticion, asi que
+         *     la siguiente ya llega sin los del rol.
+         */
+        delete: operations["quitarRol"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar los roles con los permisos que concede cada uno
+         * @description De solo lectura: los roles los siembran las migraciones y sus permisos
+         *     la siembra del arranque. Ordenados por `key`.
+         */
+        get: operations["listarRoles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -843,6 +1005,89 @@ export interface components {
             createdBy: string | null;
         };
         /**
+         * @description Una cuenta. El hash de la contrasena no esta, y no por omision: el tipo
+         *     del dominio tampoco lo lleva, asi que no hay forma de devolverlo.
+         *
+         *     Se llama `Cuenta` y no `Usuario` porque ese nombre ya lo ocupa el tipo
+         *     del dominio en `identity`, y el codigo generado vive en el mismo
+         *     paquete. Es la misma separacion que `Perfil` y `PerfilDeUsuario`.
+         */
+        Cuenta: {
+            /** Format: uuid */
+            id: string;
+            /** @example ana@casa.com */
+            email: string;
+            /** @example Ana */
+            displayName: string;
+            enabled: boolean;
+            /**
+             * @description Las claves de sus roles. Sin roles es `[]`, jamas `null`.
+             * @example [
+             *       "staff"
+             *     ]
+             */
+            roles: string[];
+            /** @description Se devuelve tambien como `ETag`. */
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: uuid */
+            updatedBy: string | null;
+        };
+        /** @description El envoltorio de coleccion. Ver `SettingsPage`. */
+        CuentasPage: {
+            content: components["schemas"]["Cuenta"][];
+            page: components["schemas"]["PageMeta"];
+        };
+        /**
+         * @description El alta. Sin `roles` a proposito: repartirlos es otro permiso. Un campo
+         *     de mas es `400`.
+         */
+        CuentaNueva: {
+            /** @example ana@casa.com */
+            email: string;
+            /** @example Ana */
+            displayName: string;
+            /**
+             * Format: password
+             * @description La contrasena inicial. Se guarda su hash argon2id.
+             */
+            password: string;
+        };
+        /**
+         * @description Reemplaza correo y nombre. Nada mas: `password`, `enabled` o `roles`
+         *     aqui son `400`.
+         */
+        CuentaModificacion: {
+            email: string;
+            displayName: string;
+        };
+        PermisoConcedido: {
+            /** @example content.page.publish */
+            key: string;
+            description: string;
+            /**
+             * @description Lo marca el modulo que declara el permiso: reparte poder en vez de
+             *     usarlo.
+             */
+            sensitive: boolean;
+        };
+        Rol: {
+            /** @example admin */
+            key: string;
+            /** @example Administracion */
+            name: string;
+            /** @description Los que concede, ordenados por clave. Ninguno es `[]`. */
+            permissions: components["schemas"]["PermisoConcedido"][];
+        };
+        /** @description El envoltorio de coleccion. Ver `SettingsPage`. */
+        RolesPage: {
+            content: components["schemas"]["Rol"][];
+            page: components["schemas"]["PageMeta"];
+        };
+        /**
          * @description La forma unica de error de toda la API (RFC 7807) con dos campos
          *     propios: `code`, estable y en mayusculas, es lo que el cliente
          *     interpreta; `traceId` es lo que se busca en el log.
@@ -892,6 +1137,12 @@ export interface components {
         Slug: string;
         PaginaId: string;
         MedioId: string;
+        CuentaId: string;
+        /**
+         * @description La clave del rol, por ejemplo `admin`.
+         * @example admin
+         */
+        RolKey: string;
         /**
          * @description El `ETag` que devolvio la lectura. `*` no se acepta.
          * @example "7"
@@ -1727,6 +1978,302 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    listarCuentas: {
+        parameters: {
+            query?: {
+                /** @description Numero de pagina, base 0. */
+                page?: components["parameters"]["Page"];
+                /**
+                 * @description Tamano de pagina. El tope es **duro**: pedir mas devuelve 100 y
+                 *     `page.size` reporta el efectivo. Sin el, `?size=1000000` seria una
+                 *     negacion de servicio de una linea.
+                 */
+                size?: components["parameters"]["Size"];
+                /**
+                 * @description `campo,dir` con `dir` en `asc` (por omision) o `desc`. Todo orden
+                 *     termina con un desempate estable por `id`.
+                 * @example [
+                 *       "email"
+                 *     ]
+                 */
+                sort?: ("email" | "email,asc" | "email,desc" | "displayName" | "displayName,asc" | "displayName,desc" | "createdAt" | "createdAt,asc" | "createdAt,desc")[];
+                /** @description Filtra por si la cuenta puede iniciar sesion. */
+                enabled?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Una pagina de cuentas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CuentasPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    crearCuenta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CuentaNueva"];
+            };
+        };
+        responses: {
+            /** @description Creada */
+            201: {
+                headers: {
+                    /**
+                     * @description URL de la cuenta recien creada
+                     * @example /api/v1/users/0192a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b
+                     */
+                    Location?: string;
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cuenta"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    leerCuenta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["CuentaId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La cuenta */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cuenta"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    guardarCuenta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description El `ETag` que devolvio la lectura. `*` no se acepta.
+                 * @example "7"
+                 */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: components["parameters"]["CuentaId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CuentaModificacion"];
+            };
+        };
+        responses: {
+            /** @description Guardada */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cuenta"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    deshabilitarCuenta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["CuentaId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deshabilitada */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cuenta"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    habilitarCuenta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["CuentaId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Habilitada */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cuenta"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    asignarRol: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["CuentaId"];
+                /**
+                 * @description La clave del rol, por ejemplo `admin`.
+                 * @example admin
+                 */
+                role: components["parameters"]["RolKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La cuenta tiene el rol */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    quitarRol: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["CuentaId"];
+                /**
+                 * @description La clave del rol, por ejemplo `admin`.
+                 * @example admin
+                 */
+                role: components["parameters"]["RolKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La cuenta ya no tiene el rol */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    listarRoles: {
+        parameters: {
+            query?: {
+                /** @description Numero de pagina, base 0. */
+                page?: components["parameters"]["Page"];
+                /**
+                 * @description Tamano de pagina. El tope es **duro**: pedir mas devuelve 100 y
+                 *     `page.size` reporta el efectivo. Sin el, `?size=1000000` seria una
+                 *     negacion de servicio de una linea.
+                 */
+                size?: components["parameters"]["Size"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Una pagina de roles */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RolesPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
         };
     };

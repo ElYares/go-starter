@@ -13,6 +13,7 @@ import (
 	"github.com/elyares/go-starter/api/internal/platform/auth"
 	"github.com/elyares/go-starter/api/internal/platform/httpx"
 	"github.com/elyares/go-starter/api/internal/platform/ids"
+	"github.com/elyares/go-starter/api/internal/platform/paging"
 	"github.com/elyares/go-starter/api/internal/platform/rbac"
 )
 
@@ -34,6 +35,12 @@ type repositorio interface {
 	rotarRefresh(ctx context.Context, anteriorID string, nueva SesionNueva) (bool, error)
 	revocarSesionesDe(ctx context.Context, userID string) error
 	revocarRefresh(ctx context.Context, hash []byte) error
+
+	// Las del dashboard de cuentas. Ver repo_cuentas.go.
+	cuentas(ctx context.Context, p paging.Params) ([]UsuarioConRoles, int64, error)
+	editar(ctx context.Context, id string, version int, m ModificacionDeUsuario) (Usuario, error)
+	habilitar(ctx context.Context, userID string) (Usuario, error)
+	catalogoDeRoles(ctx context.Context, p paging.Params) ([]RolConPermisos, int64, error)
 }
 
 type Service struct {
@@ -62,8 +69,8 @@ type UsuarioNuevo struct {
 
 // Crear da de alta a un usuario y le asigna sus roles.
 //
-// No es un endpoint todavia: el CRUD de usuarios desde el dashboard llega en
-// una fase posterior. Hoy lo usa el seed, y es lo que esa fase va a montar.
+// Los roles solo los pasa la siembra. El alta del dashboard entra por
+// CrearCuenta, que no los recibe: repartirlos es otro permiso.
 func (s *Service) Crear(ctx context.Context, n UsuarioNuevo) (Usuario, error) {
 	return s.crear(ctx, n, false)
 }
@@ -150,6 +157,13 @@ func (s *Service) Autenticar(ctx context.Context, email, password string) (Usuar
 	return u, nil
 }
 
+// puedeEntrar es la regla de quien tiene acceso, en un solo sitio: la aplican
+// el refresh y la resolucion del actor en cada peticion. Autenticar la escribe
+// desplegada porque ahi cada caso lleva su comentario.
+func (s *Service) puedeEntrar(u Usuario) bool {
+	return u.Enabled && (!u.DevSeed || s.dev)
+}
+
 // hashDeDescarte es un argon2id de una contrasena que nadie tiene. Existe solo
 // para gastar el mismo tiempo cuando el correo no existe. Ver Autenticar.
 //
@@ -167,8 +181,23 @@ var hashDeDescarte = sync.OnceValue(func() string {
 })
 
 // Actor arma el rbac.Actor de un usuario: sus permisos efectivos, por sus
-// roles. Es lo que el middleware de sesion de CU-001 va a poner en el contexto.
+// roles. Es lo que el middleware de sesion pone en el contexto.
+//
+// La cuenta se vuelve a mirar en CADA peticion, no solo al renovar. Sin eso,
+// deshabilitar a alguien le dejaba todos sus permisos hasta que caducara su
+// `at`: quince minutos en los que la persona que acaban de sacar sigue
+// pudiendo hacer todo lo que podia. Cuesta una lectura por clave primaria.
 func (s *Service) Actor(ctx context.Context, userID string) (rbac.Actor, error) {
+	u, err := s.repo.porID(ctx, userID)
+	if err != nil {
+		return rbac.Actor{}, err
+	}
+	if !s.puedeEntrar(u) {
+		// El middleware lo registra y sigue como anonimo, asi que el guard de
+		// la ruta responde 401: lo mismo que ve alguien sin sesion.
+		return rbac.Actor{}, errSinAcceso
+	}
+
 	permisos, err := s.repo.permisosDe(ctx, userID)
 	if err != nil {
 		return rbac.Actor{}, err
@@ -251,6 +280,9 @@ func traducirEstado(err error) error {
 		return httpx.Conflict("Ya hay una cuenta con ese correo")
 	case errors.Is(err, errRolNoExiste):
 		return httpx.Conflict("Ese rol no existe")
+	case errors.Is(err, errVersion):
+		return httpx.Conflict(
+			"La cuenta cambio despues de que la leiste. Vuelve a cargarla y repite el cambio")
 	case errors.Is(err, errUltimoSuperadmin):
 		return httpx.Conflict(
 			"Es el ultimo superadmin habilitado. Dale el rol a alguien mas antes de quitarselo a este")
@@ -422,7 +454,7 @@ func (s *Service) Renovar(ctx context.Context, in RenovacionDeSesion) (Sesion, e
 	}
 	// La cuenta se vuelve a mirar en cada renovacion: deshabilitarla tiene que
 	// cortar la sesion en el siguiente refresh, no dentro de catorce dias.
-	if !u.Enabled || (u.DevSeed && !s.dev) {
+	if !s.puedeEntrar(u) {
 		return Sesion{}, httpx.Unauthorized()
 	}
 

@@ -4,10 +4,10 @@
 # ServerInterface con todas las operaciones del contrato. Ver la Decision 014 y
 # el mismo archivo en internal/modules/settings/.
 #
-# Ojo con el alcance: este modulo tiene DOS familias de operaciones. Las de
-# sesion van con el tag `auth` y salen aqui; el CRUD de cuentas que llegara en
-# una fase posterior tendra el suyo, y habra que agregarlo a esta lista o no se
-# generara nada para el.
+# Este modulo tiene DOS familias de operaciones, cada una con su tag: la sesion
+# (`auth`) y las cuentas con sus roles (`users`). Las dos salen aqui; un tag que
+# falte en esta lista no genera nada, y el sintoma es que la afirmacion de
+# ServerInterface compila con los handlers de menos.
 #
 # NO se usa `HandlerWithOptions`: registra sobre un mux con middleware global y
 # con eso se perderia el permiso por ruta y la comprobacion de arranque de
@@ -24,3 +24,4 @@ generate:
 output-options:
   include-tags:
     - auth
+    - users

@@ -72,6 +72,24 @@ tags:
 
       No hay listado ni borrado todavia: borrar exige saber quien usa cada
       archivo, y eso llega con la biblioteca de medios.
+  - name: users
+    description: |
+      Las cuentas del dashboard y los roles que se les reparten.
+
+      **Todo aqui reparte poder**, asi que los cuatro permisos son sensibles y
+      el rol `admin` no los recibe: solo el `superadmin`. Crear cuentas
+      (`identity.user.write`) y repartir roles (`identity.role.assign`) son
+      permisos distintos a proposito: quien da de alta a alguien no puede por
+      eso darle poder.
+
+      **No hay DELETE de cuentas, y es deliberado.** Deshabilitar es la baja: la
+      cuenta deja de entrar al instante y sus sesiones se revocan, pero la fila
+      sigue ahi para que `createdBy` y `updatedBy` de todo lo que hizo sigan
+      nombrando a alguien.
+
+      **Siempre queda un superadmin habilitado.** Quitarle el rol o
+      deshabilitar al ultimo es `409`: sin el, nadie puede volver a conceder
+      nada. Ver HU-008.
 
 paths:
   /healthz:
@@ -952,6 +970,320 @@ paths:
         "500":
           $ref: "#/components/responses/Problem"
 
+  /users:
+    get:
+      tags: [users]
+      summary: Listar las cuentas
+      description: |
+        Sigue el molde de coleccion de `docs/04-reglas-de-crud.md` seccion 3.
+        Cada fila lleva sus roles. Ninguna respuesta de este recurso trae el
+        hash de la contrasena, ni siquiera un indicio de el.
+      operationId: listarCuentas
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+        - name: sort
+          in: query
+          description: |
+            `campo,dir` con `dir` en `asc` (por omision) o `desc`. Todo orden
+            termina con un desempate estable por `id`.
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - email
+                - email,asc
+                - email,desc
+                - displayName
+                - displayName,asc
+                - displayName,desc
+                - createdAt
+                - createdAt,asc
+                - createdAt,desc
+          example: ["email"]
+        - name: enabled
+          in: query
+          description: Filtra por si la cuenta puede iniciar sesion.
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Una pagina de cuentas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CuentasPage"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+    post:
+      tags: [users]
+      summary: Dar de alta una cuenta
+      description: |
+        La cuenta nace habilitada y **sin roles**: repartirlos pide
+        `identity.role.assign`, que es otro permiso. Un correo repetido —tambien
+        en otras mayusculas— es `409`.
+      operationId: crearCuenta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CuentaNueva"
+      responses:
+        "201":
+          description: Creada
+          headers:
+            Location:
+              description: URL de la cuenta recien creada
+              schema:
+                type: string
+              example: /api/v1/users/0192a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cuenta"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+  /users/{id}:
+    parameters:
+      - $ref: "#/components/parameters/CuentaId"
+
+    get:
+      tags: [users]
+      summary: Leer una cuenta con sus roles
+      operationId: leerCuenta
+      responses:
+        "200":
+          description: La cuenta
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cuenta"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+    put:
+      tags: [users]
+      summary: Cambiar el correo y el nombre de una cuenta
+      description: |
+        Solo correo y nombre. La contrasena, los roles y si esta habilitada
+        tienen su propia operacion, y mandarlos aqui es `400`: un `PUT` que los
+        aceptara haria de `identity.user.write` un permiso para repartir roles.
+
+        `If-Match` es **obligatorio**; si alguien guardo en medio, `409`.
+      operationId: guardarCuenta
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CuentaModificacion"
+      responses:
+        "200":
+          description: Guardada
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cuenta"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+  /users/{id}/disable:
+    parameters:
+      - $ref: "#/components/parameters/CuentaId"
+    post:
+      tags: [users]
+      summary: Deshabilitar una cuenta
+      description: |
+        La cuenta deja de entrar **al instante**: sus sesiones se revocan en la
+        misma transaccion, y un `at` suyo que siga vigente ya no resuelve
+        permisos. Deshabilitar una cuenta ya deshabilitada es el mismo estado,
+        no un error.
+
+        El ultimo superadmin habilitado no se puede deshabilitar: `409`.
+      operationId: deshabilitarCuenta
+      responses:
+        "200":
+          description: Deshabilitada
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cuenta"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+  /users/{id}/enable:
+    parameters:
+      - $ref: "#/components/parameters/CuentaId"
+    post:
+      tags: [users]
+      summary: Volver a habilitar una cuenta
+      description: |
+        Vuelve a poder iniciar sesion con la contrasena que tenia. Habilitar una
+        cuenta habilitada es el mismo estado, no un error.
+      operationId: habilitarCuenta
+      responses:
+        "200":
+          description: Habilitada
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cuenta"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+  /users/{id}/roles/{role}:
+    parameters:
+      - $ref: "#/components/parameters/CuentaId"
+      - $ref: "#/components/parameters/RolKey"
+
+    put:
+      tags: [users]
+      summary: Darle un rol a una cuenta
+      description: |
+        Idempotente: darle un rol que ya tiene es el mismo estado. Un rol que no
+        existe es `404`.
+      operationId: asignarRol
+      responses:
+        "204":
+          description: La cuenta tiene el rol
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+    delete:
+      tags: [users]
+      summary: Quitarle un rol a una cuenta
+      description: |
+        Un rol que la cuenta no tiene es `404`. Quitarle `superadmin` al ultimo
+        habilitado es `409`.
+
+        No revoca sesiones: los permisos se resuelven en cada peticion, asi que
+        la siguiente ya llega sin los del rol.
+      operationId: quitarRol
+      responses:
+        "204":
+          description: La cuenta ya no tiene el rol
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
+  /roles:
+    get:
+      tags: [users]
+      summary: Listar los roles con los permisos que concede cada uno
+      description: |
+        De solo lectura: los roles los siembran las migraciones y sus permisos
+        la siembra del arranque. Ordenados por `key`.
+      operationId: listarRoles
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: Una pagina de roles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RolesPage"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -1012,6 +1344,25 @@ components:
       schema:
         type: string
         format: uuid
+
+    CuentaId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    RolKey:
+      name: role
+      in: path
+      required: true
+      description: La clave del rol, por ejemplo `admin`.
+      schema:
+        type: string
+        maxLength: 64
+        pattern: "^[a-z][a-z0-9_-]*$"
+      example: admin
 
     IfMatch:
       name: If-Match
@@ -1494,6 +1845,112 @@ components:
         createdBy:
           type: [string, "null"]
           format: uuid
+
+    Cuenta:
+      description: |
+        Una cuenta. El hash de la contrasena no esta, y no por omision: el tipo
+        del dominio tampoco lo lleva, asi que no hay forma de devolverlo.
+
+        Se llama `Cuenta` y no `Usuario` porque ese nombre ya lo ocupa el tipo
+        del dominio en `identity`, y el codigo generado vive en el mismo
+        paquete. Es la misma separacion que `Perfil` y `PerfilDeUsuario`.
+      type: object
+      required: [id, email, displayName, enabled, roles, version, createdAt, updatedAt, updatedBy]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, example: ana@casa.com }
+        displayName: { type: string, example: Ana }
+        enabled: { type: boolean }
+        roles:
+          description: Las claves de sus roles. Sin roles es `[]`, jamas `null`.
+          type: array
+          items: { type: string }
+          example: [staff]
+        version:
+          type: integer
+          minimum: 1
+          description: Se devuelve tambien como `ETag`.
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        updatedBy:
+          type: [string, "null"]
+          format: uuid
+
+    CuentasPage:
+      description: El envoltorio de coleccion. Ver `SettingsPage`.
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/Cuenta"
+        page:
+          $ref: "#/components/schemas/PageMeta"
+
+    CuentaNueva:
+      description: |
+        El alta. Sin `roles` a proposito: repartirlos es otro permiso. Un campo
+        de mas es `400`.
+      type: object
+      required: [email, displayName, password]
+      additionalProperties: false
+      properties:
+        email: { type: string, maxLength: 254, example: ana@casa.com }
+        displayName: { type: string, minLength: 1, maxLength: 120, example: Ana }
+        password:
+          type: string
+          format: password
+          minLength: 12
+          maxLength: 1024
+          description: La contrasena inicial. Se guarda su hash argon2id.
+
+    CuentaModificacion:
+      description: |
+        Reemplaza correo y nombre. Nada mas: `password`, `enabled` o `roles`
+        aqui son `400`.
+      type: object
+      required: [email, displayName]
+      additionalProperties: false
+      properties:
+        email: { type: string, maxLength: 254 }
+        displayName: { type: string, minLength: 1, maxLength: 120 }
+
+    PermisoConcedido:
+      type: object
+      required: [key, description, sensitive]
+      properties:
+        key: { type: string, example: content.page.publish }
+        description: { type: string }
+        sensitive:
+          type: boolean
+          description: |
+            Lo marca el modulo que declara el permiso: reparte poder en vez de
+            usarlo.
+
+    Rol:
+      type: object
+      required: [key, name, permissions]
+      properties:
+        key: { type: string, example: admin }
+        name: { type: string, example: Administracion }
+        permissions:
+          description: Los que concede, ordenados por clave. Ninguno es `[]`.
+          type: array
+          items:
+            $ref: "#/components/schemas/PermisoConcedido"
+
+    RolesPage:
+      description: El envoltorio de coleccion. Ver `SettingsPage`.
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/Rol"
+        page:
+          $ref: "#/components/schemas/PageMeta"
 
     Problem:
       description: |

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/elyares/go-starter/api/internal/platform/httpx"
+	"github.com/elyares/go-starter/api/internal/platform/rbac"
 )
 
 // Los cuatro roles del starter, escritos aqui y sembrados por la migracion. Un
@@ -34,6 +35,36 @@ type Usuario struct {
 	// DevSeed marca al admin que crea `cmd/seed`. Ver Service.Autenticar.
 	DevSeed bool
 	Version int
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	// UpdatedBy es nil cuando la ultima escritura la hizo el sistema —la
+	// siembra, una migracion— y no una persona.
+	UpdatedBy *string
+}
+
+// UsuarioConRoles es la forma que ve el dashboard: la cuenta y las claves de
+// sus roles, en una sola lectura.
+type UsuarioConRoles struct {
+	Usuario
+	Roles []string
+}
+
+// ModificacionDeUsuario es lo unico que se puede cambiar de una cuenta con un
+// guardado. La contrasena, los roles y `enabled` tienen su operacion propia, y
+// que este tipo no tenga donde ponerlos es lo que impide que un guardado los
+// toque.
+type ModificacionDeUsuario struct {
+	Email       string
+	DisplayName string
+}
+
+// RolConPermisos es un rol visto desde la pantalla de roles. Los permisos son
+// los de plataforma porque es la forma que ya declaran los modulos.
+type RolConPermisos struct {
+	Key      string
+	Name     string
+	Permisos []rbac.Permission
 }
 
 // Errores del repositorio. Son sentinelas y no *httpx.Problem a proposito: el
@@ -43,18 +74,24 @@ var (
 	errYaExiste      = errors.New("identity: el correo ya esta registrado")
 	errRolNoExiste   = errors.New("identity: el rol no existe")
 	errRolNoAsignado = errors.New("identity: el usuario no tiene ese rol")
+	errVersion       = errors.New("identity: la version no coincide")
 
 	// errUltimoSuperadmin es la invariante del modulo: siempre queda un
 	// superadmin habilitado. Sin ella, quitarse el rol por descuido deja una
 	// instalacion en la que nadie puede volver a conceder un permiso ni crear
 	// una cuenta, y la unica salida es abrir la base a mano.
 	errUltimoSuperadmin = errors.New("identity: es el ultimo superadmin habilitado")
+
+	// errSinAcceso es una sesion vigente de una cuenta que ya no puede entrar:
+	// deshabilitada, o la sembrada fuera de desarrollo. No llega al cliente
+	// como tal; ver Service.Actor.
+	errSinAcceso = errors.New("identity: la cuenta no tiene acceso")
 )
 
-// Validacion. Vive aqui y no en el contrato porque hoy este modulo no expone
-// endpoints: el CRUD de usuarios llega en una fase posterior. Cuando llegue, el
-// `pattern` de OpenAPI declarara la forma y estas funciones seguiran dando el
-// mensaje, que es lo que un `pattern` incumplido no sabe decir.
+// Validacion. Vive aqui y no solo en el contrato porque el contrato declara la
+// forma pero no la hace cumplir: el servidor no valida contra el YAML. Ademas
+// estas funciones dan el mensaje por campo, que es lo que un `maxLength`
+// incumplido no sabe decir.
 
 // largos maximos. El del correo es el del RFC 5321; los otros dos son limites
 // de sentido comun que existen para que una peticion enorme falle en la
