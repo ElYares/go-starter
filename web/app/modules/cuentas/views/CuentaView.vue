@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import FichaDeCuenta from '../components/FichaDeCuenta.vue'
 import {
+  asignarContrasena,
   darRol,
   deshabilitarCuenta,
   guardarCuenta,
@@ -28,6 +29,7 @@ const puedeEscribir = computed(() => permisos.value.includes('identity.user.writ
 const puedeAsignar = computed(() => permisos.value.includes('identity.role.assign'))
 const puedeVerRoles = computed(() => permisos.value.includes('identity.role.read'))
 const esPropia = computed(() => perfil.value?.id === props.id)
+const puedeAsignarContrasena = computed(() => permisos.value.includes('identity.user.password'))
 
 const cargar = () => pedir(() => leerCuenta(useApi(), props.id))
 const guardar = (version: number, cuerpo: Schemas['CuentaModificacion']) =>
@@ -37,6 +39,7 @@ const habilitar = () => pedir(() => habilitarCuenta(useApi(), props.id))
 const dar = (rol: string) => pedir(() => darRol(useApi(), props.id, rol))
 const quitar = (rol: string) => pedir(() => quitarRol(useApi(), props.id, rol))
 const cargarRoles = () => pedir(() => listarRoles(useApi()))
+const asignar = (password: string) => pedir(() => asignarContrasena(useApi(), props.id, password))
 
 // Salir con cambios sin guardar pregunta, como en el editor de paginas.
 const pendientes = ref(false)
@@ -66,6 +69,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', alCerrar))
       :puede-escribir="puedeEscribir"
       :puede-asignar="puedeAsignar"
       :es-propia="esPropia"
+      :asignar-contrasena="puedeAsignarContrasena ? asignar : undefined"
       @cambios="pendientes = $event"
     />
   </div>

@@ -33,3 +33,9 @@ export const quitarRol = (api: ClienteApi, id: string, rol: string) =>
   api.delete(`/users/${id}/roles/${encodeURIComponent(rol)}`)
 
 export const listarRoles = (api: ClienteApi) => api.get<Schemas['RolesPage']>('/roles?size=100')
+
+/** Una contrasena temporal: la cuenta tendra que cambiarla al entrar (HU-019). */
+export const asignarContrasena = (api: ClienteApi, id: string, password: string) =>
+  api.post<void>(`/users/${id}/password`, { password } satisfies Schemas['ContrasenaTemporal'])
+
+export const listarSolicitudes = (api: ClienteApi) => api.get<Schemas['SolicitudesPage']>('/password-resets?size=100')

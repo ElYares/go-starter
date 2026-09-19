@@ -22,6 +22,9 @@ export default defineNuxtConfig({
     // servidor se puede enviar ANTES de hidratar. Ese envio es el nativo del
     // navegador —un GET a la misma URL— y no pasa por el cliente ni por el CSRF.
     '/login': { ssr: false },
+    // Igual que el login: un formulario que no hay que indexar, y que no se
+    // envie antes de hidratar.
+    '/recuperar-contrasena': { ssr: false },
   },
 
   runtimeConfig: {

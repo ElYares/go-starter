@@ -17,6 +17,7 @@ const PERFIL: Perfil = {
   displayName: 'Ana',
   roles: ['admin'],
   permissions: ['settings.read'],
+  mustChangePassword: false,
 }
 
 function apiError(status: number, extra: Partial<ConstructorParameters<typeof ApiError>[0]> = {}) {

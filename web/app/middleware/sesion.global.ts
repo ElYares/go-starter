@@ -8,6 +8,7 @@ import {
   esRutaProtegida,
   pedirPerfil,
 } from '~/modules/auth/sesion'
+import { destinoObligado } from '~/modules/auth/contrasena'
 
 /**
  * El guard del dashboard. Global a proposito: un middleware con nombre hay que
@@ -38,9 +39,12 @@ export default defineNuxtRouteMiddleware(async (to) => {
   })
 
   switch (acceso.tipo) {
-    case 'pasar':
+    case 'pasar': {
       perfil.value = acceso.perfil
-      return
+      // Con contrasena temporal, a cambiarla antes que a nada (HU-019).
+      const obligado = destinoObligado(acceso.perfil, to.path)
+      return obligado ? navigateTo(obligado) : undefined
+    }
     case 'login':
       return login()
     case 'error':

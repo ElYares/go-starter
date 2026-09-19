@@ -18,6 +18,7 @@ import { BaseBadge, BaseButton, BaseDialog, BaseEmptyState, BaseField, BaseInput
 import { ApiError } from '~/shared/api/errors'
 import type { Schemas } from '~/shared/api/generated'
 import { erroresPorCampo } from '~/shared/formularios/esquema'
+import DialogoDeContrasenaTemporal from './DialogoDeContrasenaTemporal.vue'
 
 type Cuenta = Schemas['Cuenta']
 
@@ -34,6 +35,8 @@ const props = defineProps<{
   puedeAsignar: boolean
   /** Si es la cuenta de quien mira: deshabilitarla lo saca a el. */
   esPropia: boolean
+  /** Asignar una contrasena temporal. Sin `identity.user.password` no se pasa. */
+  asignarContrasena?: (password: string) => Promise<void>
 }>()
 
 const emit = defineEmits<{ cambios: [pendientes: boolean] }>()
@@ -52,6 +55,13 @@ const cambiandoAcceso = ref(false)
 const cambiandoRol = ref<string | null>(null)
 const confirmarBaja = ref(false)
 const toast = ref({ abierto: false, titulo: '' })
+const dialogoContrasena = ref(false)
+
+// La cuenta queda con contrasena temporal y sin sesiones: se refleja sin
+// releer, para no pisar lo que se este editando en el formulario.
+function alAsignarContrasena() {
+  if (cuenta.value) cuenta.value = { ...cuenta.value, mustChangePassword: true }
+}
 
 function tomar(c: Cuenta) {
   cuenta.value = c
@@ -243,6 +253,9 @@ const fecha = (iso?: string) => (iso ? iso.slice(0, 16).replace('T', ' ') : '')
             {{ cuenta.enabled ? 'Habilitada' : 'Deshabilitada' }}
           </BaseBadge>
           <BaseBadge v-if="esPropia" variant="accent">Tu cuenta</BaseBadge>
+          <BaseBadge v-if="cuenta.mustChangePassword" variant="neutral" data-insignia="temporal">
+            Contrasena temporal
+          </BaseBadge>
           <BaseBadge v-if="pendientes" variant="danger" sr-label="Cambios">Sin guardar</BaseBadge>
         </div>
       </header>
@@ -328,6 +341,24 @@ const fecha = (iso?: string) => (iso ? iso.slice(0, 16).replace('T', ' ') : '')
           </div>
         </template>
       </div>
+
+      <div v-if="asignarContrasena && !esPropia" class="grupo" data-grupo="contrasena">
+        <h2>Contrasena</h2>
+        <p class="pista">
+          Si olvido la suya, asignale una temporal: tendra que cambiarla al entrar, y se cerraran sus sesiones.
+        </p>
+        <div class="barra">
+          <BaseButton variant="secondary" @click="dialogoContrasena = true">Asignar contrasena temporal</BaseButton>
+        </div>
+      </div>
+
+      <DialogoDeContrasenaTemporal
+        v-if="asignarContrasena"
+        v-model:open="dialogoContrasena"
+        :cuenta="cuenta"
+        :asignar="asignarContrasena"
+        @asignada="alAsignarContrasena"
+      />
 
       <BaseDialog
         v-model:open="confirmarBaja"

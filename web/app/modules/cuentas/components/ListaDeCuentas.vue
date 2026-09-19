@@ -9,6 +9,7 @@ import { RouterLink } from 'vue-router'
 import { BaseBadge, BaseButton, BaseDialog, BaseEmptyState, BaseField, BaseInput, BaseTable, type ColumnaTabla } from '~/shared/ui'
 import { ApiError } from '~/shared/api/errors'
 import type { Schemas } from '~/shared/api/generated'
+import CampoDeContrasena from '~/shared/formularios/CampoDeContrasena.vue'
 import { erroresPorCampo } from '~/shared/formularios/esquema'
 
 const props = defineProps<{
@@ -177,12 +178,12 @@ async function onCrear() {
           required
         >
           <template #default="{ id, describedBy, invalid }">
-            <BaseInput
+            <CampoDeContrasena
               :id="id"
               v-model="nueva.password"
-              type="password"
               :described-by="describedBy"
               :invalid="invalid"
+              generador
               data-campo="password"
             />
           </template>
