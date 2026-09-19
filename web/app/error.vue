@@ -10,7 +10,11 @@ import MarcoDelSitio from '~/modules/landing/components/MarcoDelSitio.vue'
 const props = defineProps<{ error: NuxtError<{ traceId?: string; destino?: string; landing?: boolean }> }>()
 
 const noExiste = computed(() => props.error.statusCode === 404)
-const conMarco = computed(() => !!props.error.data?.landing && props.error.statusCode !== 503)
+// Ni con un 503 ni con un 429 se pide el marco: con el api caido es esperar
+// otro timeout, y con la IP en su tope seria otra peticion rechazada.
+const conMarco = computed(
+  () => !!props.error.data?.landing && props.error.statusCode !== 503 && props.error.statusCode !== 429,
+)
 
 useHead({ title: () => (noExiste.value ? 'Pagina no encontrada · go-starter' : 'Algo fallo · go-starter') })
 const traceId = computed(() => props.error.data?.traceId)
@@ -20,6 +24,9 @@ const traceId = computed(() => props.error.data?.traceId)
 // landing no hay sesion que perder: quien visita solo necesita saber que es
 // temporal.
 const descripcion = computed(() => {
+  if (props.error.statusCode === 429) {
+    return 'Recibimos muchas visitas seguidas desde tu conexion. Espera un minuto y vuelve a intentarlo.'
+  }
   if (props.error.statusCode !== 503) {
     return 'Vuelve a intentarlo. Si se repite, comparte la referencia de abajo.'
   }

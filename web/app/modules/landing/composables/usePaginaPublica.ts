@@ -16,7 +16,8 @@ export async function usePaginaPublica(slug: string) {
   if (error.value || !data.value) {
     const codigo = codigoDeFallo(statusRespondido(error.value))
 
-    if (codigo !== 404) {
+    // Ni un 404 ni un 429 son un fallo del sitio: el log se queda para lo que si.
+    if (codigo !== 404 && codigo !== 429) {
       // El detalle se queda en el log del servidor; al visitante le llega el
       // codigo y un mensaje generico.
       console.error(`[landing] la API no entrego la pagina "${slug}": ${error.value?.message ?? 'sin datos'}`)
@@ -24,7 +25,8 @@ export async function usePaginaPublica(slug: string) {
 
     throw createError({
       statusCode: codigo,
-      statusMessage: codigo === 404 ? 'Pagina no encontrada' : 'El sitio no esta disponible',
+      statusMessage:
+        codigo === 404 ? 'Pagina no encontrada' : codigo === 429 ? 'Demasiadas visitas seguidas' : 'El sitio no esta disponible',
       data: { landing: true },
       fatal: true,
     })

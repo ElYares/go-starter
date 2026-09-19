@@ -38,6 +38,11 @@ describe('codigoDeFallo', () => {
     expect(codigoDeFallo(400)).toBe(404)
   })
 
+  // HU-010: el tope es del visitante, no del sitio. Espera un minuto y listo.
+  it('el tope por IP del api es 429, no un fallo nuestro', () => {
+    expect(codigoDeFallo(429)).toBe(429)
+  })
+
   it('un fallo nuestro es 500, no "vuelve mas tarde"', () => {
     expect(codigoDeFallo(500)).toBe(500)
     expect(codigoDeFallo(401)).toBe(500)

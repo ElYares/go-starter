@@ -28,6 +28,10 @@ export default defineNuxtConfig({
     // La que usa el SSR: red interna del compose. Desde el contenedor de Nuxt,
     // go-starter.localhost no existe.
     apiInternal: 'http://api:8080/api/v1',
+    // El secreto con el que el SSR le dice al api a que visitante atiende
+    // (HU-010). Solo del servidor: fuera de `public` no llega al navegador. Sin
+    // default; lo pone NUXT_API_SSR_SECRET y el plugin de servidor exige que este.
+    apiSsrSecret: '',
     public: {
       // La que usa el navegador: mismo origen, el edge la enruta.
       apiBase: '/api/v1',
