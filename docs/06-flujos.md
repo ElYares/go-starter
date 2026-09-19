@@ -225,10 +225,11 @@ sequenceDiagram
 petición
   → traceId          (genera o propaga; entra al contexto y al log)
   → recover          (un pánico responde 500 genérico, no tumba el proceso)
+  → SSR              (con el secreto, la IP es la del visitante que atiende Nuxt)
   → logger           (método, ruta, estado, duración, traceId)
+  → rate limit       (por IP: 600/min general, 30/min en /auth; salud no cuenta)
   → CORS/CSRF        (mutaciones exigen X-XSRF-TOKEN)
   → sesión           (cookie at → Actor en el contexto; sin cookie, anónimo)
-  → rate limit       (por IP; más estricto en /auth)   ← PENDIENTE, ver abajo
   → router           (resuelve el módulo y su handler)
   → guard            (permiso declarado en la ruta; sin política declarada, cierra)
   → handler → service → repo
@@ -238,12 +239,24 @@ El orden importa: `traceId` va primero porque todo lo demás lo registra, y
 `recover` va antes que el logger para que un pánico también quede registrado.
 El guard va **después** del router porque la política se declara en la ruta.
 
-**El rate limit global todavía no existe.** Hoy solo está el límite del login
-(por correo y por IP, en `platform/auth/intentos.go`), que cuenta fallos y no
-peticiones. El global es de HU-010, y trae una trampa que hay que resolver
-antes de escribirlo: **el SSR de Nuxt le pega a `api:8080` directo, sin pasar
-por el edge**, así que sin reenviar la IP del visitante todas las visitas a la
-landing salen con la IP del contenedor `web` y comparten un solo balde. El
-primer pico de tráfico tumbaría la landing entera con `429`. Y como producción
-está sin decidir, puede que el sitio correcto para ese límite sea el edge y no
-Go.
+### El límite por IP (HU-010)
+
+- **Va antes que CSRF y sesión**: un `429` no gasta una consulta en resolver
+  quién lo pide. Y después del logger, para que quede registrado
+- **Dos topes independientes**, por IP y en ventana fija de un minuto: 600 en
+  general y 30 en `/auth`. Agotar `/auth` no le quita la landing a esa IP.
+  `/healthz` y `/readyz` no cuentan: el healthcheck pega desde la misma IP
+- No es el límite del login (`platform/auth/intentos.go`), que cuenta
+  **fallos** por correo y por IP y sigue ahí
+- **El SSR se acredita con un secreto.** Nuxt le pega a `api:8080` directo, sin
+  pasar por el edge: sin más, todas las visitas a la landing saldrían con la IP
+  del contenedor `web` y compartirían un balde, y el primer pico la tumbaría con
+  `429`. El SSR manda `X-SSR-Secret` y `X-SSR-Client-IP`; el api solo cree la IP
+  si el secreto (`SSR_SECRET`) coincide, y borra las dos cabeceras siempre. No
+  se confía por red porque el edge también está en la red interna
+- `httpx.ClientIP` devuelve esa IP, así que la heredan el límite del login y
+  `refresh_tokens.ip`
+- Cuando la landing recibe el `429` del api, responde `429` al visitante: el
+  tope es suyo, no un fallo del sitio
+- **Vive en memoria**, con el mismo costo que el de intentos (Decisión 018): con
+  dos réplicas, el tope efectivo se duplica
