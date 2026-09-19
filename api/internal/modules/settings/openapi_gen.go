@@ -129,6 +129,9 @@ type SettingsPage struct {
 	Page PageMeta `json:"page"`
 }
 
+// CuentaId defines model for CuentaId.
+type CuentaId = openapi_types.UUID
+
 // MedioId defines model for MedioId.
 type MedioId = openapi_types.UUID
 
@@ -137,6 +140,9 @@ type Page = int
 
 // PaginaId defines model for PaginaId.
 type PaginaId = openapi_types.UUID
+
+// RolKey defines model for RolKey.
+type RolKey = string
 
 // Size defines model for Size.
 type Size = int
