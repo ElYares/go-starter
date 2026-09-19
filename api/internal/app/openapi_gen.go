@@ -105,11 +105,17 @@ type ReadinessChecks string
 // ReadinessStatus defines model for Readiness.Status.
 type ReadinessStatus string
 
+// CuentaId defines model for CuentaId.
+type CuentaId = openapi_types.UUID
+
 // MedioId defines model for MedioId.
 type MedioId = openapi_types.UUID
 
 // PaginaId defines model for PaginaId.
 type PaginaId = openapi_types.UUID
+
+// RolKey defines model for RolKey.
+type RolKey = string
 
 // Slug defines model for Slug.
 type Slug = string

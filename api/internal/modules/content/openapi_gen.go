@@ -224,6 +224,9 @@ type VersionesPage struct {
 	Page PageMeta `json:"page"`
 }
 
+// CuentaId defines model for CuentaId.
+type CuentaId = openapi_types.UUID
+
 // IfMatch defines model for IfMatch.
 type IfMatch = string
 
@@ -235,6 +238,9 @@ type Page = int
 
 // PaginaId defines model for PaginaId.
 type PaginaId = openapi_types.UUID
+
+// RolKey defines model for RolKey.
+type RolKey = string
 
 // Size defines model for Size.
 type Size = int
