@@ -62,7 +62,13 @@ export interface OpcionesEscritura extends OpcionesPeticion {
 export interface ClienteApi {
   get<T>(ruta: string, init?: OpcionesPeticion): Promise<T>
   post<T>(ruta: string, cuerpo?: unknown, init?: OpcionesPeticion): Promise<T>
-  put<T>(ruta: string, cuerpo: unknown, init: OpcionesEscritura & { ifMatch: string }): Promise<T>
+  /**
+   * Un reemplazo lleva siempre su `ifMatch`, y el tipo lo exige para que no se
+   * olvide. La excepcion es un `PUT` que fija un estado sin version —darle un
+   * rol a una cuenta—: ahi no hay nada que pisar, y se dice con
+   * `sinVersion: true` en vez de mandar una cabecera vacia.
+   */
+  put<T>(ruta: string, cuerpo: unknown, init: OpcionesEscritura & ({ ifMatch: string } | { sinVersion: true })): Promise<T>
   delete(ruta: string, init?: OpcionesPeticion): Promise<void>
 }
 

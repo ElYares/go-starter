@@ -18,7 +18,7 @@ import (
 //
 // password_hash no esta: sale solo por la consulta de autenticacion, que lo
 // pide aparte y con nombre. Asi no puede colarse en un listado por descuido.
-const columnas = `id, email, display_name, enabled, dev_seed, version`
+const columnas = `id, email, display_name, enabled, dev_seed, version, created_at, updated_at, updated_by`
 
 type Repo struct {
 	pool *pgxpool.Pool
@@ -73,7 +73,7 @@ func (r *Repo) paraAutenticar(ctx context.Context, email string) (Usuario, strin
 	)
 	err := r.pool.QueryRow(ctx,
 		`select `+columnas+`, password_hash from users where email = $1`, email).
-		Scan(&u.ID, &u.Email, &u.DisplayName, &u.Enabled, &u.DevSeed, &u.Version, &hash)
+		Scan(append(destinos(&u), &hash)...)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Usuario{}, "", errNoExiste
@@ -154,6 +154,12 @@ func (r *Repo) asignarRol(ctx context.Context, userID, rol string) error {
 		   on conflict do nothing`
 
 	tag, err := r.pool.Exec(ctx, q, userID, rol)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+		// La clave foranea de `user_id`: la cuenta no existe. Es un 404 desde
+		// el dashboard, no un 500.
+		return errNoExiste
+	}
 	if err != nil {
 		return traducir(err)
 	}
@@ -242,11 +248,24 @@ func hayOtroSuperadminHabilitado(usuario, rolSuper int) string {
 }
 
 // deshabilitar aplica la misma invariante, y por la misma razon atomica.
+//
+// Revoca las sesiones en la MISMA transaccion. Por separado, un fallo entre las
+// dos sentencias dejaria una cuenta deshabilitada con refresh tokens vivos, y
+// la unica senal seria que "no la deja entrar" deja de ser cierto en cuanto
+// alguien la vuelva a habilitar.
 func (r *Repo) deshabilitar(ctx context.Context, userID string) (Usuario, error) {
 	sello, err := audit.ForUpdate(ctx)
 	if err != nil {
 		return Usuario{}, err
 	}
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return Usuario{}, err
+	}
+	// Rollback despues de un Commit no hace nada; aqui cubre las salidas por
+	// error sin repetirlo en cada una.
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	q := fmt.Sprintf(`update users
 		       set enabled = false, version = version + 1, %s
@@ -264,17 +283,23 @@ func (r *Repo) deshabilitar(ctx context.Context, userID string) (Usuario, error)
 
 	args := append([]any{userID, RolSuperadmin}, sello.Values...)
 
-	rows, err := r.pool.Query(ctx, q, args...)
+	rows, err := tx.Query(ctx, q, args...)
 	if err != nil {
 		return Usuario{}, err
 	}
-	defer rows.Close()
-
 	u, err := pgx.CollectExactlyOneRow(rows, escanear)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return r.porQueNoDeshabilite(ctx, userID)
 	}
-	return u, err
+	if err != nil {
+		return Usuario{}, err
+	}
+
+	if _, err := tx.Exec(ctx, revocarLasDe, userID); err != nil {
+		return Usuario{}, err
+	}
+
+	return u, tx.Commit(ctx)
 }
 
 func (r *Repo) porQueNoDeshabilite(ctx context.Context, userID string) (Usuario, error) {
@@ -385,8 +410,16 @@ func (r *Repo) SembrarPermisos(ctx context.Context, perms []rbac.Permission) err
 
 func escanear(row pgx.CollectableRow) (Usuario, error) {
 	var u Usuario
-	err := row.Scan(&u.ID, &u.Email, &u.DisplayName, &u.Enabled, &u.DevSeed, &u.Version)
+	err := row.Scan(destinos(&u)...)
 	return u, err
+}
+
+// destinos son los punteros de `columnas`, en su orden. Viven juntos para que
+// agregar una columna a la proyeccion obligue a tocar un solo sitio: la
+// consulta de autenticacion escanea lo mismo mas el hash.
+func destinos(u *Usuario) []any {
+	return []any{&u.ID, &u.Email, &u.DisplayName, &u.Enabled, &u.DevSeed, &u.Version,
+		&u.CreatedAt, &u.UpdatedAt, &u.UpdatedBy}
 }
 
 // traducir convierte la violacion de unicidad de Postgres en el sentinela del
@@ -506,11 +539,14 @@ func (r *Repo) rotarRefresh(ctx context.Context, anteriorID string, nueva Sesion
 // respuesta a un refresh reusado: la cadena siguio sin ese token, asi que otra
 // copia circula, y no hay forma de saber cual de las dos es la legitima.
 func (r *Repo) revocarSesionesDe(ctx context.Context, userID string) error {
-	_, err := r.pool.Exec(ctx,
-		`update refresh_tokens set revoked_at = now()
-		  where user_id = $1 and revoked_at is null`, userID)
+	_, err := r.pool.Exec(ctx, revocarLasDe, userID)
 	return err
 }
+
+// revocarLasDe la comparten el robo detectado y la cuenta deshabilitada: las
+// dos cierran todas las sesiones vivas de una persona.
+const revocarLasDe = `update refresh_tokens set revoked_at = now()
+	  where user_id = $1 and revoked_at is null`
 
 // revocarRefresh cierra UNA sesion, la del token que se presenta. Revocar un
 // token que no existe o que ya estaba revocado no es un error: es el mismo

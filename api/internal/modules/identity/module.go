@@ -102,9 +102,7 @@ func (m *Module) SembrarPermisos(ctx context.Context, perms []rbac.Permission) e
 // parametro, esta linea deja de compilar y nombra el metodo que ya no cuadra.
 var _ ServerInterface = (*Module)(nil)
 
-// Routes monta la sesion. El CRUD de cuentas del dashboard sigue sin montarse,
-// y eso es deliberado: es de una fase posterior, y un endpoint adelantado seria
-// superficie publica sin contrato ni prueba de autorizacion.
+// Routes monta la sesion y el dashboard de cuentas.
 //
 // Se montan los metodos de ServerInterfaceWrapper y NO `HandlerWithOptions`,
 // por la misma razon que en settings: aquel registra sobre un mux con
@@ -132,6 +130,32 @@ func (m *Module) Routes(r *httpx.Router) {
 		// Sesion y nada mas: todo el mundo puede leer su propio perfil, asi que
 		// no hay permiso con nombre que pedir. Ver rbac.RequireSession.
 		r.Get("/me", w.MiPerfil, rbac.RequireSession())
+	})
+
+	// Sobre la seccion 8 del molde —"el usuario A recibe 404 sobre un recurso
+	// de B"—: NO aplica, y es deliberado. Una cuenta no es de quien la creo; lo
+	// que decide quien la toca es el permiso, y los cuatro son del superadmin.
+	//
+	// Repartir roles es `identity.role.assign` y no `identity.user.write`: quien
+	// da de alta cuentas no puede por eso darles poder. Por la misma razon el
+	// alta no recibe roles y el PUT no los acepta.
+	r.Group("/api/v1", func(r *httpx.Router) {
+		r.Group("/users", func(r *httpx.Router) {
+			r.Get("", w.ListarCuentas, rbac.Require("identity.user.read"))
+			r.Post("", w.CrearCuenta, rbac.Require("identity.user.write"))
+			r.Get("/{id}", w.LeerCuenta, rbac.Require("identity.user.read"))
+			r.Put("/{id}", w.GuardarCuenta, rbac.Require("identity.user.write"))
+			r.Post("/{id}/disable", w.DeshabilitarCuenta, rbac.Require("identity.user.write"))
+			r.Post("/{id}/enable", w.HabilitarCuenta, rbac.Require("identity.user.write"))
+			r.Put("/{id}/roles/{role}", w.AsignarRol, rbac.Require("identity.role.assign"))
+			r.Delete("/{id}/roles/{role}", w.QuitarRol, rbac.Require("identity.role.assign"))
+
+			// DELETE no existe: deshabilitar es la baja. Borrar la fila dejaria
+			// `created_by` y `updated_by` de todo lo que hizo esa persona
+			// apuntando a nadie. PATCH tampoco: el PUT ya es de dos campos.
+		})
+
+		r.Get("/roles", w.ListarRoles, rbac.Require("identity.role.read"))
 	})
 }
 

@@ -149,16 +149,32 @@ func (r *repoFalso) asignarRol(_ context.Context, userID, rol string) error {
 
 func (r *repoFalso) quitarRol(context.Context, string, string) error { return r.errAlQuitarRol }
 
+// deshabilitar imita al de verdad: cambia la fila y revoca sus sesiones. Que
+// las dos cosas ocurran en UNA transaccion solo se puede comprobar contra la
+// base; ver repo_integracion_test.go.
 func (r *repoFalso) deshabilitar(_ context.Context, userID string) (Usuario, error) {
 	if r.errAlDeshabilitar != nil {
 		return Usuario{}, r.errAlDeshabilitar
 	}
-	u, err := r.porID(context.Background(), userID)
-	if err != nil {
-		return Usuario{}, err
+	f := r.filaPorID(userID)
+	if f == nil {
+		return Usuario{}, errNoExiste
 	}
-	u.Enabled = false
-	return u, nil
+	if f.usuario.Enabled {
+		f.usuario.Enabled = false
+		f.usuario.Version++
+		_ = r.revocarSesionesDe(context.Background(), userID)
+	}
+	return f.usuario, nil
+}
+
+func (r *repoFalso) filaPorID(id string) *filaFalsa {
+	for _, f := range r.porEmail {
+		if f.usuario.ID == id {
+			return f
+		}
+	}
+	return nil
 }
 
 func servicio(t *testing.T, dev bool) (*Service, *repoFalso) {

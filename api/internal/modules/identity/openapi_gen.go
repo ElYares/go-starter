@@ -6,12 +6,53 @@
 package identity
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
+
+// Defines values for ListarCuentasParamsSort.
+const (
+	CreatedAt       ListarCuentasParamsSort = "createdAt"
+	CreatedAtasc    ListarCuentasParamsSort = "createdAt,asc"
+	CreatedAtdesc   ListarCuentasParamsSort = "createdAt,desc"
+	DisplayName     ListarCuentasParamsSort = "displayName"
+	DisplayNameasc  ListarCuentasParamsSort = "displayName,asc"
+	DisplayNamedesc ListarCuentasParamsSort = "displayName,desc"
+	Email           ListarCuentasParamsSort = "email"
+	Emailasc        ListarCuentasParamsSort = "email,asc"
+	Emaildesc       ListarCuentasParamsSort = "email,desc"
+)
+
+// Valid indicates whether the value is a known member of the ListarCuentasParamsSort enum.
+func (e ListarCuentasParamsSort) Valid() bool {
+	switch e {
+	case CreatedAt:
+		return true
+	case CreatedAtasc:
+		return true
+	case CreatedAtdesc:
+		return true
+	case DisplayName:
+		return true
+	case DisplayNameasc:
+		return true
+	case DisplayNamedesc:
+		return true
+	case Email:
+		return true
+	case Emailasc:
+		return true
+	case Emaildesc:
+		return true
+	default:
+		return false
+	}
+}
 
 // Credenciales `additionalProperties: false` a proposito: un campo de mas es un `400` y
 // no algo que se ignora en silencio. Es el mismo criterio que
@@ -28,6 +69,63 @@ type Credenciales struct {
 	Password string `json:"password"`
 }
 
+// Cuenta Una cuenta. El hash de la contrasena no esta, y no por omision: el tipo
+// del dominio tampoco lo lleva, asi que no hay forma de devolverlo.
+//
+// Se llama `Cuenta` y no `Usuario` porque ese nombre ya lo ocupa el tipo
+// del dominio en `identity`, y el codigo generado vive en el mismo
+// paquete. Es la misma separacion que `Perfil` y `PerfilDeUsuario`.
+type Cuenta struct {
+	CreatedAt   time.Time          `json:"createdAt"`
+	DisplayName string             `json:"displayName"`
+	Email       string             `json:"email"`
+	Enabled     bool               `json:"enabled"`
+	Id          openapi_types.UUID `json:"id"`
+
+	// Roles Las claves de sus roles. Sin roles es `[]`, jamas `null`.
+	Roles     []string            `json:"roles"`
+	UpdatedAt time.Time           `json:"updatedAt"`
+	UpdatedBy *openapi_types.UUID `json:"updatedBy"`
+
+	// Version Se devuelve tambien como `ETag`.
+	Version int `json:"version"`
+}
+
+// CuentaModificacion Reemplaza correo y nombre. Nada mas: `password`, `enabled` o `roles`
+// aqui son `400`.
+type CuentaModificacion struct {
+	DisplayName string `json:"displayName"`
+	Email       string `json:"email"`
+}
+
+// CuentaNueva El alta. Sin `roles` a proposito: repartirlos es otro permiso. Un campo
+// de mas es `400`.
+type CuentaNueva struct {
+	DisplayName string `json:"displayName"`
+	Email       string `json:"email"`
+
+	// Password La contrasena inicial. Se guarda su hash argon2id.
+	Password string `json:"password"`
+}
+
+// CuentasPage El envoltorio de coleccion. Ver `SettingsPage`.
+type CuentasPage struct {
+	Content []Cuenta `json:"content"`
+
+	// Page Los metadatos de una pagina. `size` es el tamano EFECTIVO: si el cliente
+	// pidio un millon, aqui dice 100.
+	Page PageMeta `json:"page"`
+}
+
+// PageMeta Los metadatos de una pagina. `size` es el tamano EFECTIVO: si el cliente
+// pidio un millon, aqui dice 100.
+type PageMeta struct {
+	Number        int   `json:"number"`
+	Size          int   `json:"size"`
+	TotalElements int64 `json:"totalElements"`
+	TotalPages    int   `json:"totalPages"`
+}
+
 // Perfil Lo unico que el frontend sabe del usuario. `permissions[]` son los
 // efectivos, ya resueltos por sus roles.
 type Perfil struct {
@@ -40,6 +138,16 @@ type Perfil struct {
 	// campo" no le sirve a nadie.
 	Permissions []string `json:"permissions"`
 	Roles       []string `json:"roles"`
+}
+
+// PermisoConcedido defines model for PermisoConcedido.
+type PermisoConcedido struct {
+	Description string `json:"description"`
+	Key         string `json:"key"`
+
+	// Sensitive Lo marca el modulo que declara el permiso: reparte poder en vez de
+	// usarlo.
+	Sensitive bool `json:"sensitive"`
 }
 
 // Problem La forma unica de error de toda la API (RFC 7807) con dos campos
@@ -61,11 +169,44 @@ type Problem struct {
 	Type     *string `json:"type,omitempty"`
 }
 
+// Rol defines model for Rol.
+type Rol struct {
+	Key  string `json:"key"`
+	Name string `json:"name"`
+
+	// Permissions Los que concede, ordenados por clave. Ninguno es `[]`.
+	Permissions []PermisoConcedido `json:"permissions"`
+}
+
+// RolesPage El envoltorio de coleccion. Ver `SettingsPage`.
+type RolesPage struct {
+	Content []Rol `json:"content"`
+
+	// Page Los metadatos de una pagina. `size` es el tamano EFECTIVO: si el cliente
+	// pidio un millon, aqui dice 100.
+	Page PageMeta `json:"page"`
+}
+
+// CuentaId defines model for CuentaId.
+type CuentaId = openapi_types.UUID
+
+// IfMatch defines model for IfMatch.
+type IfMatch = string
+
 // MedioId defines model for MedioId.
 type MedioId = openapi_types.UUID
 
+// Page defines model for Page.
+type Page = int
+
 // PaginaId defines model for PaginaId.
 type PaginaId = openapi_types.UUID
+
+// RolKey defines model for RolKey.
+type RolKey = string
+
+// Size defines model for Size.
+type Size = int
 
 // Slug defines model for Slug.
 type Slug = string
@@ -103,8 +244,52 @@ type RenovarSesionParams struct {
 	XXSRFTOKEN XsrfToken `json:"X-XSRF-TOKEN"`
 }
 
+// ListarRolesParams defines parameters for ListarRoles.
+type ListarRolesParams struct {
+	// Page Numero de pagina, base 0.
+	Page *Page `form:"page,omitempty" json:"page,omitempty"`
+
+	// Size Tamano de pagina. El tope es **duro**: pedir mas devuelve 100 y
+	// `page.size` reporta el efectivo. Sin el, `?size=1000000` seria una
+	// negacion de servicio de una linea.
+	Size *Size `form:"size,omitempty" json:"size,omitempty"`
+}
+
+// ListarCuentasParams defines parameters for ListarCuentas.
+type ListarCuentasParams struct {
+	// Page Numero de pagina, base 0.
+	Page *Page `form:"page,omitempty" json:"page,omitempty"`
+
+	// Size Tamano de pagina. El tope es **duro**: pedir mas devuelve 100 y
+	// `page.size` reporta el efectivo. Sin el, `?size=1000000` seria una
+	// negacion de servicio de una linea.
+	Size *Size `form:"size,omitempty" json:"size,omitempty"`
+
+	// Sort `campo,dir` con `dir` en `asc` (por omision) o `desc`. Todo orden
+	// termina con un desempate estable por `id`.
+	Sort *[]ListarCuentasParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// Enabled Filtra por si la cuenta puede iniciar sesion.
+	Enabled *bool `form:"enabled,omitempty" json:"enabled,omitempty"`
+}
+
+// ListarCuentasParamsSort defines parameters for ListarCuentas.
+type ListarCuentasParamsSort string
+
+// GuardarCuentaParams defines parameters for GuardarCuenta.
+type GuardarCuentaParams struct {
+	// IfMatch El `ETag` que devolvio la lectura. `*` no se acepta.
+	IfMatch IfMatch `json:"If-Match"`
+}
+
 // IniciarSesionJSONRequestBody defines body for IniciarSesion for application/json ContentType.
 type IniciarSesionJSONRequestBody = Credenciales
+
+// CrearCuentaJSONRequestBody defines body for CrearCuenta for application/json ContentType.
+type CrearCuentaJSONRequestBody = CuentaNueva
+
+// GuardarCuentaJSONRequestBody defines body for GuardarCuenta for application/json ContentType.
+type GuardarCuentaJSONRequestBody = CuentaModificacion
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -120,6 +305,33 @@ type ServerInterface interface {
 	// RenovarSesion Renovar la sesion
 	// (POST /auth/refresh)
 	RenovarSesion(w http.ResponseWriter, r *http.Request, params RenovarSesionParams)
+	// ListarRoles Listar los roles con los permisos que concede cada uno
+	// (GET /roles)
+	ListarRoles(w http.ResponseWriter, r *http.Request, params ListarRolesParams)
+	// ListarCuentas Listar las cuentas
+	// (GET /users)
+	ListarCuentas(w http.ResponseWriter, r *http.Request, params ListarCuentasParams)
+	// CrearCuenta Dar de alta una cuenta
+	// (POST /users)
+	CrearCuenta(w http.ResponseWriter, r *http.Request)
+	// LeerCuenta Leer una cuenta con sus roles
+	// (GET /users/{id})
+	LeerCuenta(w http.ResponseWriter, r *http.Request, id CuentaId)
+	// GuardarCuenta Cambiar el correo y el nombre de una cuenta
+	// (PUT /users/{id})
+	GuardarCuenta(w http.ResponseWriter, r *http.Request, id CuentaId, params GuardarCuentaParams)
+	// DeshabilitarCuenta Deshabilitar una cuenta
+	// (POST /users/{id}/disable)
+	DeshabilitarCuenta(w http.ResponseWriter, r *http.Request, id CuentaId)
+	// HabilitarCuenta Volver a habilitar una cuenta
+	// (POST /users/{id}/enable)
+	HabilitarCuenta(w http.ResponseWriter, r *http.Request, id CuentaId)
+	// QuitarRol Quitarle un rol a una cuenta
+	// (DELETE /users/{id}/roles/{role})
+	QuitarRol(w http.ResponseWriter, r *http.Request, id CuentaId, role RolKey)
+	// AsignarRol Darle un rol a una cuenta
+	// (PUT /users/{id}/roles/{role})
+	AsignarRol(w http.ResponseWriter, r *http.Request, id CuentaId, role RolKey)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -280,6 +492,340 @@ func (siw *ServerInterfaceWrapper) RenovarSesion(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ListarRoles operation middleware
+func (siw *ServerInterfaceWrapper) ListarRoles(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListarRolesParams
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "size" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "size", r.URL.Query(), &params.Size, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "size"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "size", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarRoles(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListarCuentas operation middleware
+func (siw *ServerInterfaceWrapper) ListarCuentas(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListarCuentasParams
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "size" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "size", r.URL.Query(), &params.Size, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "size"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "size", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort", r.URL.Query(), &params.Sort, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "enabled" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "enabled", r.URL.Query(), &params.Enabled, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "enabled"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "enabled", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarCuentas(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CrearCuenta operation middleware
+func (siw *ServerInterfaceWrapper) CrearCuenta(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CrearCuenta(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LeerCuenta operation middleware
+func (siw *ServerInterfaceWrapper) LeerCuenta(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id CuentaId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LeerCuenta(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GuardarCuenta operation middleware
+func (siw *ServerInterfaceWrapper) GuardarCuenta(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id CuentaId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GuardarCuentaParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GuardarCuenta(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeshabilitarCuenta operation middleware
+func (siw *ServerInterfaceWrapper) DeshabilitarCuenta(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id CuentaId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeshabilitarCuenta(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// HabilitarCuenta operation middleware
+func (siw *ServerInterfaceWrapper) HabilitarCuenta(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id CuentaId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.HabilitarCuenta(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// QuitarRol operation middleware
+func (siw *ServerInterfaceWrapper) QuitarRol(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id CuentaId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "role" -------------
+	var role RolKey
+
+	err = runtime.BindStyledParameterWithOptions("simple", "role", r.PathValue("role"), &role, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.QuitarRol(w, r, id, role)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AsignarRol operation middleware
+func (siw *ServerInterfaceWrapper) AsignarRol(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id CuentaId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "role" -------------
+	var role RolKey
+
+	err = runtime.BindStyledParameterWithOptions("simple", "role", r.PathValue("role"), &role, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AsignarRol(w, r, id, role)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -404,6 +950,15 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/auth/me", wrapper.MiPerfil)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/refresh", wrapper.RenovarSesion)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/logout", wrapper.CerrarSesion)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users", wrapper.ListarCuentas)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/users", wrapper.CrearCuenta)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users/{id}", wrapper.LeerCuenta)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/users/{id}", wrapper.GuardarCuenta)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/users/{id}/disable", wrapper.DeshabilitarCuenta)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/users/{id}/enable", wrapper.HabilitarCuenta)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/users/{id}/roles/{role}", wrapper.QuitarRol)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/users/{id}/roles/{role}", wrapper.AsignarRol)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/roles", wrapper.ListarRoles)
 
 	return m
 }
