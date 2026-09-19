@@ -30,6 +30,7 @@ cp .env.example .env
 # JWT_SIGNING_KEY no tiene default: openssl rand -base64 48
 # SSR_SECRET tampoco: openssl rand -base64 32
 # HOST_UID y HOST_GID, los de `id -u` e `id -g` (en macOS suele ser 501, no 1000)
+devherd park "$PWD"                    # que devherd conozca el proyecto
 devherd up && devherd proxy apply
 ./scripts/seed.sh                      # migraciones, permisos y el superadmin
 ```
@@ -48,6 +49,13 @@ Lo que hace cada paso que no se ve:
   sembrada y el paquete de web. Pide el árbol limpio, para que `git diff` muestre
   exactamente lo que hizo; correrlo dos veces no hace nada. Sus casos se prueban
   con `./scripts/rename.test.sh`
+- **`devherd park "$PWD"`** registra el fork en devherd. `proxy apply` solo
+  escribe rutas para proyectos registrados, y un fork recien clonado no lo esta
+  aunque su carpeta padre este "estacionada": el descubrimiento corre al hacer
+  `park`, no despues. Sin esto, `proxy apply` termina diciendo `applied` y el
+  dominio del fork no aparece en su lista de `domains`. Reescanear la carpeta
+  padre tampoco sirve si en ella hay un choque de dominios: el escaneo se corta
+  antes de llegar al fork
 - **`devherd proxy apply` pide `sudo`.** Sin él, `<nombre>.localhost` lo contesta
   el proxy compartido con un `200` vacío: parece que funciona y no llega al
   stack
@@ -86,7 +94,7 @@ No cuentan en la hora, porque no son del starter:
 | 1 | Nacer | `gh repo create <nombre> --template ElYares/go-starter --private --clone`, `cd <nombre>` y `./scripts/enlazar-starter.sh` | | | |
 | 2 | Renombrar | `./scripts/rename.sh <nombre> <modulo-go>`, revisar `git diff --stat` y commitear | | | |
 | 3 | Configurar | `cp .env.example .env`, `JWT_SIGNING_KEY` con `openssl rand -base64 48`, `SSR_SECRET` con `openssl rand -base64 32`, y `HOST_UID`/`HOST_GID` con `id -u`/`id -g` | | | |
-| 4 | Levantar | `devherd up && devherd proxy apply` (pide sudo), hasta que `http://<nombre>.localhost/` muestre la landing con el nombre nuevo | | | |
+| 4 | Levantar | `devherd park "$PWD"`, `devherd up && devherd proxy apply` (pide sudo), hasta que `http://<nombre>.localhost/` muestre la landing con el nombre nuevo | | | |
 | 5 | Sembrar | `./scripts/seed.sh` y entrar en `/admin` con `superadmin@<nombre>.localhost` | | | |
 | 6 | La piel | En `web/app/assets/tokens/base.css`, el color de marca: `--color-accent`, `--color-accent-strong` y `--color-on-accent`, **en el bloque claro y en el oscuro**. Correr la prueba de contraste (abajo) hasta que pase, y ver el botón de la portada con el color nuevo | | | |
 | 7 | La marca | `/admin` → Configuración: `site.brand` (nombre y logo), `site.nav` (al menos un enlace más) y `site.footer` | | | |
