@@ -38,7 +38,7 @@ var (
 // El `filter` es lo que hace que una cuenta sin roles salga con `{}` y no con
 // `{NULL}`, que es lo que da un left join sin coincidencias.
 const fuenteDeCuentas = `(
-	select u.id, u.email, u.display_name, u.enabled, u.dev_seed, u.version,
+	select u.id, u.email, u.display_name, u.enabled, u.dev_seed, u.must_change_password, u.version,
 	       u.created_at, u.updated_at, u.updated_by,
 	       coalesce(array_agg(ro.key order by ro.key) filter (where ro.key is not null), '{}') as roles
 	  from users u

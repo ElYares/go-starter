@@ -54,6 +54,17 @@ func (e ListarCuentasParamsSort) Valid() bool {
 	}
 }
 
+// CambioDeContrasena defines model for CambioDeContrasena.
+type CambioDeContrasena struct {
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
+}
+
+// ContrasenaTemporal defines model for ContrasenaTemporal.
+type ContrasenaTemporal struct {
+	Password string `json:"password"`
+}
+
 // Credenciales `additionalProperties: false` a proposito: un campo de mas es un `400` y
 // no algo que se ignora en silencio. Es el mismo criterio que
 // `SettingNuevo`.
@@ -81,6 +92,9 @@ type Cuenta struct {
 	Email       string             `json:"email"`
 	Enabled     bool               `json:"enabled"`
 	Id          openapi_types.UUID `json:"id"`
+
+	// MustChangePassword Tiene una contrasena temporal que todavia no cambio.
+	MustChangePassword bool `json:"mustChangePassword"`
 
 	// Roles Las claves de sus roles. Sin roles es `[]`, jamas `null`.
 	Roles     []string            `json:"roles"`
@@ -126,12 +140,26 @@ type PageMeta struct {
 	TotalPages    int   `json:"totalPages"`
 }
 
+// PedidoDeContrasena defines model for PedidoDeContrasena.
+type PedidoDeContrasena struct {
+	Email string `json:"email"`
+}
+
+// PedidoRecibido El mismo cuerpo exista o no la cuenta.
+type PedidoRecibido struct {
+	Message string `json:"message"`
+}
+
 // Perfil Lo unico que el frontend sabe del usuario. `permissions[]` son los
 // efectivos, ya resueltos por sus roles.
 type Perfil struct {
 	DisplayName string             `json:"displayName"`
 	Email       string             `json:"email"`
 	Id          openapi_types.UUID `json:"id"`
+
+	// MustChangePassword La cuenta entro con una contrasena temporal que asigno otra persona.
+	// Hasta cambiarla no resuelve ningun permiso: `permissions` sale vacio.
+	MustChangePassword bool `json:"mustChangePassword"`
 
 	// Permissions Vacio es `[]`, jamas `null`: un cliente que hace `.includes()` sobre
 	// null revienta, y la diferencia entre "sin permisos" y "no vino el
@@ -187,6 +215,24 @@ type RolesPage struct {
 	Page PageMeta `json:"page"`
 }
 
+// Solicitud defines model for Solicitud.
+type Solicitud struct {
+	CreatedAt   time.Time          `json:"createdAt"`
+	DisplayName string             `json:"displayName"`
+	Email       string             `json:"email"`
+	Id          openapi_types.UUID `json:"id"`
+	UserId      openapi_types.UUID `json:"userId"`
+}
+
+// SolicitudesPage El envoltorio de coleccion. Ver `SettingsPage`.
+type SolicitudesPage struct {
+	Content []Solicitud `json:"content"`
+
+	// Page Los metadatos de una pagina. `size` es el tamano EFECTIVO: si el cliente
+	// pidio un millon, aqui dice 100.
+	Page PageMeta `json:"page"`
+}
+
 // CuentaId defines model for CuentaId.
 type CuentaId = openapi_types.UUID
 
@@ -234,6 +280,16 @@ type CerrarSesionParams struct {
 	XXSRFTOKEN XsrfToken `json:"X-XSRF-TOKEN"`
 }
 
+// PedirContrasenaParams defines parameters for PedirContrasena.
+type PedirContrasenaParams struct {
+	// XXSRFTOKEN El valor de la cookie `XSRF-TOKEN`, reenviado a mano. Es el doble envio:
+	// quien no puede leer la cookie —otro origen— no puede forjar la cabecera.
+	//
+	// Se declara aqui, y no solo en el middleware, para que el cliente
+	// generado sepa que la operacion la necesita.
+	XXSRFTOKEN XsrfToken `json:"X-XSRF-TOKEN"`
+}
+
 // RenovarSesionParams defines parameters for RenovarSesion.
 type RenovarSesionParams struct {
 	// XXSRFTOKEN El valor de la cookie `XSRF-TOKEN`, reenviado a mano. Es el doble envio:
@@ -242,6 +298,17 @@ type RenovarSesionParams struct {
 	// Se declara aqui, y no solo en el middleware, para que el cliente
 	// generado sepa que la operacion la necesita.
 	XXSRFTOKEN XsrfToken `json:"X-XSRF-TOKEN"`
+}
+
+// ListarSolicitudesParams defines parameters for ListarSolicitudes.
+type ListarSolicitudesParams struct {
+	// Page Numero de pagina, base 0.
+	Page *Page `form:"page,omitempty" json:"page,omitempty"`
+
+	// Size Tamano de pagina. El tope es **duro**: pedir mas devuelve 100 y
+	// `page.size` reporta el efectivo. Sin el, `?size=1000000` seria una
+	// negacion de servicio de una linea.
+	Size *Size `form:"size,omitempty" json:"size,omitempty"`
 }
 
 // ListarRolesParams defines parameters for ListarRoles.
@@ -285,11 +352,20 @@ type GuardarCuentaParams struct {
 // IniciarSesionJSONRequestBody defines body for IniciarSesion for application/json ContentType.
 type IniciarSesionJSONRequestBody = Credenciales
 
+// CambiarContrasenaJSONRequestBody defines body for CambiarContrasena for application/json ContentType.
+type CambiarContrasenaJSONRequestBody = CambioDeContrasena
+
+// PedirContrasenaJSONRequestBody defines body for PedirContrasena for application/json ContentType.
+type PedirContrasenaJSONRequestBody = PedidoDeContrasena
+
 // CrearCuentaJSONRequestBody defines body for CrearCuenta for application/json ContentType.
 type CrearCuentaJSONRequestBody = CuentaNueva
 
 // GuardarCuentaJSONRequestBody defines body for GuardarCuenta for application/json ContentType.
 type GuardarCuentaJSONRequestBody = CuentaModificacion
+
+// AsignarContrasenaJSONRequestBody defines body for AsignarContrasena for application/json ContentType.
+type AsignarContrasenaJSONRequestBody = ContrasenaTemporal
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -302,9 +378,18 @@ type ServerInterface interface {
 	// MiPerfil Quien tiene esta sesion
 	// (GET /auth/me)
 	MiPerfil(w http.ResponseWriter, r *http.Request)
+	// CambiarContrasena Cambiar la propia contrasena
+	// (POST /auth/password)
+	CambiarContrasena(w http.ResponseWriter, r *http.Request)
+	// PedirContrasena Pedir que asignen una contrasena temporal
+	// (POST /auth/password-reset)
+	PedirContrasena(w http.ResponseWriter, r *http.Request, params PedirContrasenaParams)
 	// RenovarSesion Renovar la sesion
 	// (POST /auth/refresh)
 	RenovarSesion(w http.ResponseWriter, r *http.Request, params RenovarSesionParams)
+	// ListarSolicitudes Listar las solicitudes de contrasena pendientes
+	// (GET /password-resets)
+	ListarSolicitudes(w http.ResponseWriter, r *http.Request, params ListarSolicitudesParams)
 	// ListarRoles Listar los roles con los permisos que concede cada uno
 	// (GET /roles)
 	ListarRoles(w http.ResponseWriter, r *http.Request, params ListarRolesParams)
@@ -326,6 +411,9 @@ type ServerInterface interface {
 	// HabilitarCuenta Volver a habilitar una cuenta
 	// (POST /users/{id}/enable)
 	HabilitarCuenta(w http.ResponseWriter, r *http.Request, id CuentaId)
+	// AsignarContrasena Asignar una contrasena temporal
+	// (POST /users/{id}/password)
+	AsignarContrasena(w http.ResponseWriter, r *http.Request, id CuentaId)
 	// QuitarRol Quitarle un rol a una cuenta
 	// (DELETE /users/{id}/roles/{role})
 	QuitarRol(w http.ResponseWriter, r *http.Request, id CuentaId, role RolKey)
@@ -447,6 +535,65 @@ func (siw *ServerInterfaceWrapper) MiPerfil(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// CambiarContrasena operation middleware
+func (siw *ServerInterfaceWrapper) CambiarContrasena(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CambiarContrasena(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PedirContrasena operation middleware
+func (siw *ServerInterfaceWrapper) PedirContrasena(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PedirContrasenaParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-XSRF-TOKEN" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-XSRF-TOKEN")]; found {
+		var XXSRFTOKEN XsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-XSRF-TOKEN", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-XSRF-TOKEN", valueList[0], &XXSRFTOKEN, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-XSRF-TOKEN", Err: err})
+			return
+		}
+
+		params.XXSRFTOKEN = XXSRFTOKEN
+
+	} else {
+		err := fmt.Errorf("Header parameter X-XSRF-TOKEN is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-XSRF-TOKEN", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PedirContrasena(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RenovarSesion operation middleware
 func (siw *ServerInterfaceWrapper) RenovarSesion(w http.ResponseWriter, r *http.Request) {
 
@@ -483,6 +630,52 @@ func (siw *ServerInterfaceWrapper) RenovarSesion(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RenovarSesion(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListarSolicitudes operation middleware
+func (siw *ServerInterfaceWrapper) ListarSolicitudes(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListarSolicitudesParams
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "size" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "size", r.URL.Query(), &params.Size, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "size"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "size", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarSolicitudes(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -756,6 +949,32 @@ func (siw *ServerInterfaceWrapper) HabilitarCuenta(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// AsignarContrasena operation middleware
+func (siw *ServerInterfaceWrapper) AsignarContrasena(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id CuentaId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AsignarContrasena(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // QuitarRol operation middleware
 func (siw *ServerInterfaceWrapper) QuitarRol(w http.ResponseWriter, r *http.Request) {
 
@@ -950,6 +1169,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/auth/me", wrapper.MiPerfil)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/refresh", wrapper.RenovarSesion)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/logout", wrapper.CerrarSesion)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/password-reset", wrapper.PedirContrasena)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/password", wrapper.CambiarContrasena)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users", wrapper.ListarCuentas)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/users", wrapper.CrearCuenta)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users/{id}", wrapper.LeerCuenta)
@@ -958,6 +1179,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/users/{id}/enable", wrapper.HabilitarCuenta)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/users/{id}/roles/{role}", wrapper.QuitarRol)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/users/{id}/roles/{role}", wrapper.AsignarRol)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/users/{id}/password", wrapper.AsignarContrasena)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/password-resets", wrapper.ListarSolicitudes)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/roles", wrapper.ListarRoles)
 
 	return m

@@ -62,6 +62,12 @@ func TestLoPublicoViveBajoSuPrefijoSalvoLasExcepcionesEscritas(t *testing.T) {
 		// global les exige la cabecera como a toda mutacion.
 		"POST /api/v1/auth/refresh": true,
 		"POST /api/v1/auth/logout":  true,
+		// HU-019: pedir una contrasena temporal. Sin sesion por definicion —quien
+		// la pide la olvido—; la protegen el CSRF, el tope de /auth y que
+		// responde igual exista o no la cuenta. Cambiar la propia exige sesion
+		// con RequireSession, como `me`, y por eso tambien se ve sin permiso.
+		"POST /api/v1/auth/password-reset": true,
+		"POST /api/v1/auth/password":       true,
 		// La UI de exploracion del contrato. Solo existe con API_DOCS_ENABLED y
 		// no es superficie publica de la API, por eso tampoco esta en el spec.
 		"GET /api/v1/docs":         true,
