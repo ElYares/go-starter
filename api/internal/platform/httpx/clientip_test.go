@@ -70,3 +70,78 @@ func TestUnaIpV6SeResuelveIgual(t *testing.T) {
 		t.Fatalf("ip = %q", ip)
 	}
 }
+
+// --- el SSR de Nuxt (HU-010) ---------------------------------------------------
+
+// ipVista pasa la peticion por ConfiarEnSSR y devuelve la IP que ve lo que
+// viene despues, y las cabeceras con las que llego.
+func ipVista(t *testing.T, secreto string, prepara func(*http.Request)) (string, http.Header) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/public/settings", nil)
+	req.RemoteAddr = "172.18.0.5:41234" // el contenedor web
+	prepara(req)
+
+	var (
+		ip        string
+		cabeceras http.Header
+	)
+	ConfiarEnSSR(secreto)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		ip, cabeceras = ClientIP(r), r.Header.Clone()
+	})).ServeHTTP(httptest.NewRecorder(), req)
+	return ip, cabeceras
+}
+
+func TestConElSecretoSeUsaLaIpDelVisitanteQueDiceElSSR(t *testing.T) {
+	ip, cabeceras := ipVista(t, "el-secreto", func(r *http.Request) {
+		r.Header.Set(CabeceraSecretoSSR, "el-secreto")
+		r.Header.Set(CabeceraIPDelSSR, "203.0.113.7")
+	})
+	if ip != "203.0.113.7" {
+		t.Errorf("ip = %q; con el secreto tiene que ser la del visitante", ip)
+	}
+	if cabeceras.Get(CabeceraSecretoSSR) != "" || cabeceras.Get(CabeceraIPDelSSR) != "" {
+		t.Errorf("las cabeceras del SSR siguieron adelante: %v", cabeceras)
+	}
+}
+
+// El criterio 6: un cliente que llega por el edge puede mandar las cabeceras
+// del SSR, pero sin el secreto no gana nada. Sigue contando la ultima entrada
+// de X-Forwarded-For, la que puso el edge.
+func TestSinElSecretoLasCabecerasDelSSRNoCuentan(t *testing.T) {
+	for nombre, secreto := range map[string]string{"otro": "adivinado", "vacio": "", "casi": "el-secret"} {
+		t.Run(nombre, func(t *testing.T) {
+			ip, cabeceras := ipVista(t, "el-secreto", func(r *http.Request) {
+				r.Header.Set("X-Forwarded-For", "203.0.113.7, 198.51.100.9")
+				r.Header.Set(CabeceraSecretoSSR, secreto)
+				r.Header.Set(CabeceraIPDelSSR, "203.0.113.7")
+			})
+			if ip != "198.51.100.9" {
+				t.Errorf("ip = %q; sin el secreto manda el edge", ip)
+			}
+			if cabeceras.Get(CabeceraSecretoSSR) != "" {
+				t.Error("un secreto equivocado siguio adelante en las cabeceras")
+			}
+		})
+	}
+}
+
+// Sin secreto configurado no se acredita a nadie, ni a quien mande uno vacio.
+func TestUnSecretoVacioNoAcreditaANadie(t *testing.T) {
+	ip, _ := ipVista(t, "", func(r *http.Request) {
+		r.Header.Set(CabeceraSecretoSSR, "")
+		r.Header.Set(CabeceraIPDelSSR, "203.0.113.7")
+	})
+	if ip != "172.18.0.5" {
+		t.Errorf("ip = %q; sin secreto configurado cuenta la conexion", ip)
+	}
+}
+
+func TestUnaIpDelSSRQueNoEsIpNoSeCree(t *testing.T) {
+	ip, _ := ipVista(t, "el-secreto", func(r *http.Request) {
+		r.Header.Set(CabeceraSecretoSSR, "el-secreto")
+		r.Header.Set(CabeceraIPDelSSR, "no-soy-una-ip")
+	})
+	if ip != "172.18.0.5" {
+		t.Errorf("ip = %q", ip)
+	}
+}

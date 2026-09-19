@@ -59,6 +59,7 @@ jobs:
       # Credencial de usar y tirar, de un servicio que vive lo que dura el
       # trabajo y no publica nada fuera del runner. config.Load() la exige.
       JWT_SIGNING_KEY: solo-para-ci-no-es-un-secreto
+      SSR_SECRET: solo-para-ci-no-es-un-secreto
       # Relativa al directorio del trabajo (api/). Muere con el runner.
       STORAGE_PATH: .storage
 
@@ -181,6 +182,7 @@ jobs:
     env:
       DATABASE_URL: postgres://starter:cambiame@localhost:5432/starter?sslmode=disable
       JWT_SIGNING_KEY: solo-para-ci-no-es-un-secreto
+      SSR_SECRET: solo-para-ci-no-es-un-secreto
       STORAGE_PATH: .storage
 
     steps:

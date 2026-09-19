@@ -19,6 +19,7 @@ import (
 	"github.com/elyares/go-starter/api/internal/platform/config"
 	"github.com/elyares/go-starter/api/internal/platform/db"
 	"github.com/elyares/go-starter/api/internal/platform/httpx"
+	"github.com/elyares/go-starter/api/internal/platform/limite"
 	"github.com/elyares/go-starter/api/internal/platform/observ"
 	"github.com/elyares/go-starter/api/internal/platform/rbac"
 )
@@ -46,6 +47,12 @@ type App struct {
 	firmante *auth.Firmante
 	emisor   *auth.Emisor
 	resolver auth.ResolverActor
+
+	// El tope por IP (HU-010) y el secreto con el que el SSR dice a quien
+	// atiende. Ver armarLimite.
+	secretoSSR    string
+	limiteGeneral *limite.Limitador
+	limiteAuth    *limite.Limitador
 }
 
 func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error) {
@@ -82,6 +89,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	if err := a.armarSesion(cfg.JWTSigningKey, cfg.CookieSecure); err != nil {
 		return nil, err
 	}
+	a.armarLimite(cfg.SSRSecret)
 
 	mods, err := Modules(cfg, pool)
 	if err != nil {
@@ -93,6 +101,14 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	}
 
 	return a, nil
+}
+
+// armarLimite prepara los dos topes por IP. Aparte de New por la misma razon
+// que armarSesion: las pruebas arman la misma cadena que produccion.
+func (a *App) armarLimite(secretoSSR string) {
+	a.secretoSSR = secretoSSR
+	a.limiteGeneral = limite.New(limite.TopeGeneral, limite.Ventana)
+	a.limiteAuth = limite.New(limite.TopeAuth, limite.Ventana)
 }
 
 // armarSesion construye las piezas que la cadena global necesita para leer una
@@ -195,7 +211,14 @@ func (a *App) Handler() http.Handler {
 	return observ.Chain(a.router.Handler(),
 		observ.TraceID,
 		httpx.Recover(a.log),
+		// Acreditar al SSR antes que nada que lea la IP del cliente: el
+		// limite, el login y las sesiones guardadas.
+		httpx.ConfiarEnSSR(a.secretoSSR),
 		observ.RequestLogger(a.log),
+		// El tope por IP antes que CSRF y sesion: un 429 no gasta una consulta
+		// en resolver quien lo pide. Despues del logger, para que quede
+		// registrado.
+		limite.Middleware(a.limiteGeneral, a.limiteAuth),
 		// CSRF antes que sesion: una mutacion forjada se rechaza sin haber
 		// gastado una consulta en resolver quien la manda.
 		auth.CSRF(a.emisor),

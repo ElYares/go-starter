@@ -38,11 +38,15 @@ export function slugDeRuta(segmentos: string | string[] | undefined): string | n
  * - **503** si no hubo respuesta (`status` ausente: la API esta caida o no se
  *   alcanza) o si lo que respondio es una puerta de enlace sin servicio detras.
  *   Un 200 con una pagina vacia haria que un buscador indexe el hueco
+ * - **429** si el api dijo que esta IP paso su tope (HU-010): el SSR la
+ *   acredita con la IP del visitante, asi que el tope es el suyo y no del sitio.
+ *   Como 500 le decia "fallo nuestro" a quien solo tiene que esperar un minuto
  * - **500** para lo demas: un fallo nuestro no es "vuelve mas tarde"
  */
-export function codigoDeFallo(status: number | undefined): 404 | 500 | 503 {
+export function codigoDeFallo(status: number | undefined): 404 | 429 | 500 | 503 {
   if (status === undefined || status === 0) return 503
   if (status === 404 || status === 400) return 404
+  if (status === 429) return 429
   if (status === 502 || status === 503 || status === 504) return 503
   return 500
 }

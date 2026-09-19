@@ -28,6 +28,7 @@ cd mi-tienda
 ./scripts/rename.sh mi-tienda github.com/acme/mi-tienda   # y commitear el resultado
 cp .env.example .env
 # JWT_SIGNING_KEY no tiene default: openssl rand -base64 48
+# SSR_SECRET tampoco: openssl rand -base64 32
 # HOST_UID y HOST_GID, los de `id -u` e `id -g` (en macOS suele ser 501, no 1000)
 devherd up && devherd proxy apply
 ./scripts/seed.sh                      # migraciones, permisos y el superadmin
@@ -84,7 +85,7 @@ No cuentan en la hora, porque no son del starter:
 |---|---|---|---|---|---|
 | 1 | Nacer | `gh repo create <nombre> --template ElYares/go-starter --private --clone`, `cd <nombre>` y `./scripts/enlazar-starter.sh` | | | |
 | 2 | Renombrar | `./scripts/rename.sh <nombre> <modulo-go>`, revisar `git diff --stat` y commitear | | | |
-| 3 | Configurar | `cp .env.example .env`, `JWT_SIGNING_KEY` con `openssl rand -base64 48`, y `HOST_UID`/`HOST_GID` con `id -u`/`id -g` | | | |
+| 3 | Configurar | `cp .env.example .env`, `JWT_SIGNING_KEY` con `openssl rand -base64 48`, `SSR_SECRET` con `openssl rand -base64 32`, y `HOST_UID`/`HOST_GID` con `id -u`/`id -g` | | | |
 | 4 | Levantar | `devherd up && devherd proxy apply` (pide sudo), hasta que `http://<nombre>.localhost/` muestre la landing con el nombre nuevo | | | |
 | 5 | Sembrar | `./scripts/seed.sh` y entrar en `/admin` con `superadmin@<nombre>.localhost` | | | |
 | 6 | La piel | En `web/app/assets/tokens/base.css`, el color de marca: `--color-accent`, `--color-accent-strong` y `--color-on-accent`, **en el bloque claro y en el oscuro**. Correr la prueba de contraste (abajo) hasta que pase, y ver el botón de la portada con el color nuevo | | | |

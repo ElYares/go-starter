@@ -149,12 +149,14 @@ de firma con default es una clave de firma en producción.
 HOST_UID / HOST_GID      # para que lo generado dentro no quede de root
 DB_NAME / DB_USER / DB_PASSWORD   # el compose arma DATABASE_URL con ellas
 JWT_SIGNING_KEY          # sin default. Si falta, el proceso no arranca
+SSR_SECRET               # sin default. El compose se lo da a api y a web (HU-010)
 COOKIE_SECURE            # false solo en local sin TLS
 API_DOCS_ENABLED         # la UI de /api/v1/docs; se apaga sola fuera de dev
 MIGRATE_ON_START         # el compose la pone en true para desarrollo
 STORAGE_PATH             # sin default. Los archivos subidos; el compose la pone
 NUXT_PUBLIC_API_BASE     # /api/v1        (lo usa el navegador)
 NUXT_API_INTERNAL        # http://api:8080/api/v1  (lo usa el SSR)
+NUXT_API_SSR_SECRET      # el SSR_SECRET, del lado de web; sin el, web no arranca
 ```
 
 `.env.example` es la referencia con valores de local.
@@ -178,6 +180,12 @@ peor que uno que no levanta.
   —así tampoco corren `cmd/migrate` ni `cmd/seed` con una llave vacía—.
   Cambiarla invalida todos los `at` emitidos: quien tenga sesión vuelve al
   login en la siguiente petición, no en quince minutos
+- **`SSR_SECRET`** acredita al SSR de Nuxt, que le pega al api por la red
+  interna y no por el edge: con el, el SSR dice a que visitante atiende y el
+  limite por IP cuenta contra ese visitante. Se genera con
+  `openssl rand -base64 32`. Sin el no arranca ni el api (`config.Load`) ni el
+  web (`server/plugins/secreto-ssr.ts`): arrancar sin el haria que toda la
+  landing compartiera el balde del contenedor web. Ver `06-flujos.md` §6
 - **`COOKIE_SECURE`** pone la bandera `Secure` en las cuatro cookies. Sin la
   variable, o con un valor que no se entiende (`si`, `yes`), queda en **true**:
   la falla segura es la que no manda la sesión por http. Sale de config y **no**

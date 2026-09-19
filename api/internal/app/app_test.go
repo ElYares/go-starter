@@ -21,6 +21,7 @@ func appDePrueba(t *testing.T, mods ...Module) *App {
 	if err := a.armarSesion(cfg.JWTSigningKey, cfg.CookieSecure); err != nil {
 		t.Fatalf("armarSesion: %v", err)
 	}
+	a.armarLimite(cfg.SSRSecret)
 	if err := a.montar(mods); err != nil {
 		t.Fatalf("montar: %v", err)
 	}
