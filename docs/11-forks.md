@@ -129,9 +129,26 @@ nota.
 |---|---|---|---|
 | | | | |
 
+Las de la corrida de 2026-09-18 (en `ElYares/prueba-fork`), todas resueltas:
+
+| Paso | Qué pasó | Qué se hizo |
+|---|---|---|
+| Después del 2 | El primer push del fork dejó el CI en rojo: `rename.test.sh` asumía que el nombre del starter seguía en el repo | La prueba se salta en un fork renombrado (HU-016) |
+| 3 | La guía no decía que `HOST_UID`/`HOST_GID` van con `id -u`/`id -g` (en macOS, 501) | Paso 3 y "Nacer" (HU-016) |
+| 6 | El naranja de marca con texto blanco quedó en 3.87:1; la prueba de contraste lo atrapa, pero la guía no mandaba a correrla | Paso 6 con el comando y el porqué de los dos rellenos (HU-016) |
+| Después | Un fork de `--template` no podía traer mejoras: `refusing to merge unrelated histories` | `enlazar-starter.sh` al nacer, y "Traer mejoras" reescrita (HU-017) |
+
 ### El resultado
 
 - Medido el: ____ · por: ____ · total: ____ min
+- **Medido el 2026-09-18 · por Claude · total: 2 min 21 s de máquina.** No es
+  la hora de una persona: es un agente que conoce el proyecto, con el dashboard
+  automatizado y las capas de Docker ya en caché (levantar tomó 44 s). Para una
+  persona que lee la guía por primera vez se estimó entre 20 y 35 minutos, sin
+  medirlo. El recorrido se hizo completo contra un repo real en GitHub, y sus
+  cuatro fricciones están arriba, resueltas. Se dio por buena para cerrar la
+  Fase 5 (decisión del proyecto, 2026-09-18); **la corrida de una persona con
+  este checklist sigue siendo la que contesta cuánto tarda de verdad**
 - Si pasa de 60, la Fase 5 no se cierra: se atacan las fricciones más caras y
   se vuelve a medir. El resultado de cada corrida se escribe aquí, con su fecha;
   no se borra el anterior
