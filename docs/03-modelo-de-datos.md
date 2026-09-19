@@ -109,6 +109,22 @@ Un superadmin **deshabilitado no cuenta** como el que queda.
 Quitárselo al único que lo tiene es una operación normal, y bloquearla sería un
 `409` que nadie entiende.
 
+### Desde el dashboard (`/users`, `/roles`)
+
+- **No hay `DELETE` de cuentas.** Deshabilitar es la baja: la fila se queda para
+  que el `created_by` y el `updated_by` de todo lo que hizo esa persona sigan
+  nombrando a alguien
+- **Crear cuentas no es repartir poder.** `identity.user.write` da de alta,
+  edita y deshabilita; `identity.role.assign` reparte roles. Por eso el alta no
+  recibe roles y el `PUT` solo acepta correo y nombre: un campo de más es `400`
+- **Deshabilitar revoca en la misma transacción.** Separadas, un fallo entre las
+  dos sentencias dejaría una cuenta deshabilitada con `rt` vivos
+- **Los roles y sus permisos se ven, no se editan.** Los roles los siembra la
+  migración y sus permisos la siembra del arranque. Editar las concesiones de
+  un rol es de una historia posterior
+- El tipo de cable se llama `Cuenta` y no `Usuario`: el código generado vive en
+  el paquete `identity`, donde `Usuario` ya es el tipo del dominio
+
 ## Contenido: la landing editable (`modules/content`)
 
 Este es el corazón del starter. La landing **no vive en el código**: vive en la

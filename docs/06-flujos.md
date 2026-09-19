@@ -89,7 +89,11 @@ sequenceDiagram
   refresh, y ese caso no cuenta como robo
 - **Lo que no se revoca:** el `at`. Es un token firmado y vive sus quince minutos
   aunque la sesión se haya cerrado o se haya detectado un robo
-- Deshabilitar la cuenta corta la sesión en el siguiente refresh
+- **Deshabilitar la cuenta la saca al instante**, no en el siguiente refresh.
+  Revoca todos sus `rt` en la misma transacción que la deshabilita, y
+  `Service.Actor` vuelve a mirar la cuenta en cada petición: un `at` todavía
+  vigente de una cuenta deshabilitada ya no resuelve permisos, y el guard
+  responde `401` como sin sesión (HU-018)
 - **Exclusión obligatoria:** el interceptor del cliente **no** debe reintentar
   `/auth/refresh`. Si el `401` del refresh vuelve a entrar al interceptor, este
   se encuentra su propia promesa en vuelo y se pone a esperarla: el síntoma no
