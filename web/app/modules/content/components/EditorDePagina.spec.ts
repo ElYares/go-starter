@@ -186,6 +186,41 @@ describe('EditorDePagina: guardar', () => {
     expect(w.find('[data-aviso="conflicto"]').exists()).toBe(false)
   })
 
+  // El mismo 409 es tambien "ese slug ya lo usa otra pagina". Antes se anunciaba
+  // como si alguien hubiera guardado en medio, y "descartar y recargar" no
+  // arreglaba nada: el slug seguia ocupado.
+  it('un 409 con la version intacta es el slug de otra pagina, no un conflicto de version', async () => {
+    const guardar = vi.fn(async () => {
+      throw error(409)
+    })
+    const { w } = montar({ guardar })
+    await flushPromises()
+    await campo(w, 'slug').setValue('inicio')
+
+    await boton(w, 'Guardar')!.trigger('click')
+    await flushPromises()
+
+    expect(w.find('[data-aviso="conflicto"]').exists()).toBe(false)
+    expect(w.text()).toContain('Ya hay otra pagina con esta direccion')
+    expect(campo(w, 'slug').attributes('aria-invalid')).toBe('true')
+    expect((campo(w, 'slug').element as HTMLInputElement).value).toBe('inicio')
+  })
+
+  it('si no se puede releer tras un 409, avisa del conflicto sin hora', async () => {
+    const cargar = vi.fn().mockResolvedValueOnce(pagina()).mockRejectedValueOnce(error(0))
+    const guardar = vi.fn(async () => {
+      throw error(409)
+    })
+    const { w } = montar({ cargar, guardar })
+    await flushPromises()
+    await editarTitulo(w, 'Mi cambio')
+
+    await boton(w, 'Guardar')!.trigger('click')
+    await flushPromises()
+
+    expect(w.find('[data-aviso="conflicto"]').text()).toContain('Alguien guardo esta pagina')
+  })
+
   it('una caida al guardar lo dice y los cambios siguen', async () => {
     const { w } = montar({ guardar: async () => { throw error(0) } })
     await flushPromises()
