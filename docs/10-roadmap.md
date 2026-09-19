@@ -93,6 +93,10 @@ y el CI pasa en ambos casos.
 **Hecho cuando:** un fork nuevo llega a "landing propia publicada" en menos de
 una hora, y esa hora está medida, no estimada.
 
+**Cerrada el 2026-09-18** con la corrida de `11-forks.md` ("Medir un fork"),
+hecha por Claude: 2 min 21 s de máquina, no la hora de una persona. El
+resultado, sus fricciones y por qué se dio por buena están ahí.
+
 ---
 
 ## Después, según el fork
