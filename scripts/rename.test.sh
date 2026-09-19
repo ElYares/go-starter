@@ -9,6 +9,17 @@
 set -euo pipefail
 
 raiz=$(git rev-parse --show-toplevel)
+viejo="go""-starter"
+
+# En un fork ya renombrado no queda nada que renombrar, y los casos de abajo
+# —que buscan el nombre del starter— no tienen sobre que correr. Sin esta
+# salida, el primer push de todo fork dejaba su CI en rojo (visto en la corrida
+# de CU-007, en ElYares/prueba-fork).
+if ! git -C "$raiz" grep -q -e "$viejo" -- ':!docs'; then
+  echo "rename.test: este repositorio ya es un fork renombrado (no dice $viejo fuera de docs/): no hay renombre que probar"
+  exit 0
+fi
+
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
@@ -25,7 +36,6 @@ cp "$raiz/scripts/rename.sh" "$copia/scripts/rename.sh"
   git -c user.email=prueba@fork -c user.name=prueba commit -qm inicial
 )
 
-viejo="go""-starter"
 fallos=0
 ok() { echo "ok   $1"; }
 mal() { echo "MAL  $1"; fallos=$((fallos + 1)); }
