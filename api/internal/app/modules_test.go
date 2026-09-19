@@ -107,6 +107,7 @@ func configDePrueba() config.Config {
 		Env:           "dev",
 		JWTSigningKey: "llave-de-prueba-no-usar-fuera-de-aqui",
 		StoragePath:   filepath.Join(os.TempDir(), "go-starter-pruebas-de-app"),
+		SSRSecret:     "secreto-de-prueba-del-ssr",
 	}
 }
 

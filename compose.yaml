@@ -41,6 +41,9 @@ services:
       DATABASE_URL: postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=disable
       # Sin default a proposito: si falta, el proceso muere al arrancar.
       JWT_SIGNING_KEY: ${JWT_SIGNING_KEY}
+      # El mismo que recibe web: con el, el SSR dice a que visitante atiende y
+      # el limite por IP cuenta contra el. Sin default, igual que la llave.
+      SSR_SECRET: ${SSR_SECRET}
       COOKIE_SECURE: ${COOKIE_SECURE}
       API_DOCS_ENABLED: ${API_DOCS_ENABLED}
       # Solo desarrollo. En produccion las migraciones son un paso explicito del
@@ -85,6 +88,9 @@ services:
       # La que usa el SSR: red interna del compose. No son intercambiables.
       # Ver docs/06-flujos.md seccion 3.
       NUXT_API_INTERNAL: http://api:8080/api/v1
+      # El secreto con el que el SSR le dice al api a que visitante atiende
+      # (HU-010). Solo lo usa el servidor de Nuxt: no va en `public`.
+      NUXT_API_SSR_SECRET: ${SSR_SECRET}
     # 'npm install' en cada arranque porque node_modules vive en un volumen que
     # nace vacio. Con el volumen ya poblado y el lockfile sin cambios, npm no
     # baja nada y agrega ~1 s.

@@ -18,6 +18,9 @@ type Config struct {
 	APIDocsEnabled bool
 	MigrateOnStart bool
 	StoragePath    string
+	// SSRSecret acredita al SSR de Nuxt, que le pega al api por la red interna
+	// y le dice a que visitante atiende. Ver httpx.ConfiarEnSSR (HU-010).
+	SSRSecret string
 }
 
 func (c Config) IsDev() bool { return c.Env == "dev" }
@@ -27,7 +30,7 @@ func (c Config) IsDev() bool { return c.Env == "dev" }
 // arranques fallidos.
 //
 // Un secreto con valor por omision es un secreto en produccion. Por eso
-// DATABASE_URL y JWT_SIGNING_KEY no lo tienen, y el proceso no arranca sin
+// DATABASE_URL, JWT_SIGNING_KEY y SSR_SECRET no lo tienen, y el proceso no arranca sin
 // ellas. Ver docs/08-infra-local.md.
 func Load() (Config, error) {
 	var missing []string
@@ -57,6 +60,11 @@ func Load() (Config, error) {
 		// capa que se pierde al redesplegar, y eso se descubre cuando faltan
 		// las imagenes. Ver docs/08-infra-local.md.
 		StoragePath: require("STORAGE_PATH"),
+		// Sin default, como la llave de firma: uno conocido dejaria a cualquiera
+		// hacerse pasar por el SSR y elegir contra que IP cuentan sus
+		// peticiones. Y sin ninguno, toda la landing compartiria el balde del
+		// contenedor web y el primer pico la tumbaria con 429.
+		SSRSecret: require("SSR_SECRET"),
 	}
 
 	if len(missing) > 0 {

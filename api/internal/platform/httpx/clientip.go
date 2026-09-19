@@ -1,6 +1,8 @@
 package httpx
 
 import (
+	"context"
+	"crypto/subtle"
 	"net"
 	"net/http"
 	"strings"
@@ -22,7 +24,14 @@ import (
 // Esto vale porque hay EXACTAMENTE UN salto de confianza, el edge. Un fork que
 // meta otro proxy delante tiene que contar saltos desde el final, o volvera a
 // creerle a quien no debe. Ver docs/08-infra-local.md.
+//
+// La excepcion es el SSR de Nuxt, que no pasa por el edge: si ConfiarEnSSR
+// acredito la peticion, la IP es la del visitante que el SSR dice atender.
 func ClientIP(r *http.Request) string {
+	if ip, ok := r.Context().Value(claveIPDelSSR{}).(string); ok {
+		return ip
+	}
+
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		partes := strings.Split(xff, ",")
 		ultima := strings.TrimSpace(partes[len(partes)-1])
@@ -39,4 +48,50 @@ func ClientIP(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return host
+}
+
+// Las dos cabeceras con las que el SSR de Nuxt dice a quien atiende.
+const (
+	CabeceraSecretoSSR = "X-SSR-Secret"
+	CabeceraIPDelSSR   = "X-SSR-Client-IP"
+)
+
+type claveIPDelSSR struct{}
+
+// ConfiarEnSSR acredita las peticiones del SSR de Nuxt, que le pega al api por
+// la red interna y no por el edge (HU-010).
+//
+// Sin esto, todas las visitas a la landing llegan con la IP del contenedor web
+// y comparten un solo balde del limite: el primer pico de trafico la tumbaria
+// entera con 429. Con esto, cada visita cuenta contra la IP de su visitante.
+//
+// **Se confia por un secreto y no por la red.** El edge tambien esta en la red
+// interna, asi que "confiar en IPs privadas" le daria el mismo credito a
+// cualquier cliente que llegue por el. Un cliente puede mandar las dos
+// cabeceras a traves del edge, pero no conoce el secreto.
+//
+// Las dos cabeceras se BORRAN siempre, coincida o no el secreto: nada despues
+// de este middleware —el log incluido— tiene por que ver el secreto, y un
+// handler que las leyera a mano se saltaria esta comprobacion.
+//
+// Un secreto vacio no acredita nada. config lo exige, pero una prueba que arme
+// la cadena sin el no tiene que abrir la puerta.
+func ConfiarEnSSR(secreto string) func(http.Handler) http.Handler {
+	esperado := []byte(secreto)
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			dado := r.Header.Get(CabeceraSecretoSSR)
+			ip := net.ParseIP(strings.TrimSpace(r.Header.Get(CabeceraIPDelSSR)))
+			r.Header.Del(CabeceraSecretoSSR)
+			r.Header.Del(CabeceraIPDelSSR)
+
+			// ConstantTimeCompare y no ==: una comparacion que sale en el
+			// primer byte distinto deja adivinar el secreto midiendo tiempos.
+			if len(esperado) > 0 && ip != nil &&
+				subtle.ConstantTimeCompare([]byte(dado), esperado) == 1 {
+				r = r.WithContext(context.WithValue(r.Context(), claveIPDelSSR{}, ip.String()))
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
