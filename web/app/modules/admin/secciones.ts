@@ -19,6 +19,8 @@ export const SECCIONES: Seccion[] = [
   { ruta: '/admin', etiqueta: 'Inicio', permiso: null },
   { ruta: '/admin/paginas', etiqueta: 'Paginas', permiso: 'content.page.read' },
   { ruta: '/admin/configuracion', etiqueta: 'Configuracion', permiso: 'settings.read' },
+  { ruta: '/admin/usuarios', etiqueta: 'Usuarios', permiso: 'identity.user.read' },
+  { ruta: '/admin/roles', etiqueta: 'Roles', permiso: 'identity.role.read' },
 ]
 
 /**

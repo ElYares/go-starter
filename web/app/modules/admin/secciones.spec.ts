@@ -27,6 +27,14 @@ describe('seccionesVisibles', () => {
     expect(seccionesVisibles(['content.page.publish']).map((s) => s.ruta)).toEqual(['/admin'])
   })
 
+  // HU-018: usuarios y roles son dos entradas, cada una con el permiso de
+  // lectura de su pantalla. El de escritura solo no las abre.
+  it('usuarios y roles piden su permiso de lectura', () => {
+    expect(seccionesVisibles(['identity.user.read']).map((s) => s.ruta)).toEqual(['/admin', '/admin/usuarios'])
+    expect(seccionesVisibles(['identity.role.read']).map((s) => s.ruta)).toEqual(['/admin', '/admin/roles'])
+    expect(seccionesVisibles(['identity.user.write', 'identity.role.assign']).map((s) => s.ruta)).toEqual(['/admin'])
+  })
+
   // `modulo.accion` o `modulo.recurso.accion`, como los declara el api
   // (settings.read, content.page.read). Un permiso mal escrito aqui oculta la
   // entrada a todo el mundo sin un error.
