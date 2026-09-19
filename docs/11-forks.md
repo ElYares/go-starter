@@ -24,6 +24,7 @@ fork que arrastra parches de plataforma no va a poder volver a traer mejoras.
 ```sh
 gh repo create mi-tienda --template ElYares/go-starter --private --clone
 cd mi-tienda
+./scripts/enlazar-starter.sh           # para poder traer mejoras del starter
 ./scripts/rename.sh mi-tienda github.com/acme/mi-tienda   # y commitear el resultado
 cp .env.example .env
 # JWT_SIGNING_KEY no tiene default: openssl rand -base64 48
@@ -34,6 +35,9 @@ devherd up && devherd proxy apply
 
 Lo que hace cada paso que no se ve:
 
+- **`enlazar-starter.sh`** registra al starter como ancestro del fork sin
+  cambiar ningún archivo. Sin él, el fork nace sin historia común con el starter
+  y "Traer mejoras" (abajo) no funciona. Ver ahí el porqué
 - **`--template` exige que `ElYares/go-starter` esté marcado como template** en
   la configuración del repo en GitHub. Sin eso, `gh` falla. El fork nace sin la
   historia del starter; para traer mejoras después, ver abajo
@@ -78,7 +82,7 @@ No cuentan en la hora, porque no son del starter:
 
 | # | Paso | Qué se hace | Inicio | Fin | Min |
 |---|---|---|---|---|---|
-| 1 | Nacer | `gh repo create <nombre> --template ElYares/go-starter --private --clone` y `cd <nombre>` | | | |
+| 1 | Nacer | `gh repo create <nombre> --template ElYares/go-starter --private --clone`, `cd <nombre>` y `./scripts/enlazar-starter.sh` | | | |
 | 2 | Renombrar | `./scripts/rename.sh <nombre> <modulo-go>`, revisar `git diff --stat` y commitear | | | |
 | 3 | Configurar | `cp .env.example .env`, `JWT_SIGNING_KEY` con `openssl rand -base64 48`, y `HOST_UID`/`HOST_GID` con `id -u`/`id -g` | | | |
 | 4 | Levantar | `devherd up && devherd proxy apply` (pide sudo), hasta que `http://<nombre>.localhost/` muestre la landing con el nombre nuevo | | | |
@@ -188,10 +192,44 @@ borra.
 ## Traer mejoras del starter
 
 ```sh
-git remote add starter git@github.com:ElYares/go-starter.git
 git fetch starter && git merge starter/main
+# si hay conflictos: resolverlos quedándose con el nombre del fork, y commitear
+./scripts/rename.sh mi-tienda github.com/acme/mi-tienda   # lo que trajo con el nombre del starter
+go build ./... && npm run build                          # y commitear si rename.sh cambió algo
 ```
+
+**Requiere el enlace de "Nacer".** Un fork de `--template` nace con un solo
+commit y sin historia común con el starter: `git merge starter/main` responde
+`refusing to merge unrelated histories`, y forzándolo con
+`--allow-unrelated-histories` sale un conflicto por cada archivo renombrado (100,
+en la prueba de 2026-09-18). `enlazar-starter.sh` hace un merge `-s ours` con el
+commit del starter **del que nació el fork** —el que tiene el mismo árbol que su
+primer commit—, y desde ahí cada merge trae solo lo nuevo. Enlazar con el `main`
+de hoy sería peor que no enlazar: git creería que el fork ya tiene los cambios de
+en medio y se los saltaría en silencio.
+
+Tres cosas que pasan al traer mejoras:
+
+- **Lo que no tocó el renombre entra sin conflictos**
+- **Un cambio junto a una línea renombrada** —un import de `app/modules.go`, por
+  ejemplo— da conflicto en ese archivo. Se resuelve quedándose con el nombre del
+  fork y con lo nuevo del starter
+- **Una línea nueva con el nombre del starter** —el import de un módulo nuevo—
+  llega sin conflicto y sin renombrar, y el fork deja de compilar. Por eso
+  `rename.sh` otra vez: renombra solo lo que falta
 
 Funciona mientras el fork respete la tabla de arriba. Los conflictos que salgan
 son exactamente donde el fork se desvió, y esa información también es útil: si
 un archivo de `platform/` conflictúa, ahí hay un parche que debió ser PR.
+
+**Un fork que nació antes de que existiera `enlazar-starter.sh`** no lo tiene.
+Se corre el del starter sin copiarlo:
+
+```sh
+git remote add starter https://github.com/ElYares/go-starter.git
+git fetch starter
+bash <(git show starter/main:scripts/enlazar-starter.sh)
+```
+
+`./scripts/enlazar-starter.test.sh` recorre todo esto con un starter y un fork de
+mentira, y corre en el job `fork` del CI.
