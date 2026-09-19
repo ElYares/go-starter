@@ -1,4 +1,5 @@
 import type { Schemas } from '~/shared/api/generated'
+import { esHrefSeguro } from '~/shared/blocks/href'
 
 /**
  * El marco de la landing —marca, menu y pie— a partir de `/public/settings`.
@@ -23,9 +24,6 @@ export interface Sitio {
   pie: { texto?: string; enlaces: Enlace[] }
 }
 
-// El mismo patron que los esquemas de settings: una ruta del sitio o https.
-// `//otro.com` empieza por `/` y lleva a otro sitio; `javascript:` es un XSS.
-const HREF_SEGURO = /^(\/([^/]|$)|https:\/\/)/
 
 const texto = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() !== '' ? v : undefined)
 
@@ -34,7 +32,7 @@ function enlaces(v: unknown): Enlace[] {
   return v.flatMap((e) => {
     const label = texto((e as Enlace | null)?.label)
     const href = texto((e as Enlace | null)?.href)
-    return label && href && HREF_SEGURO.test(href) ? [{ label, href }] : []
+    return label && href && esHrefSeguro(href) ? [{ label, href }] : []
   })
 }
 

@@ -36,10 +36,10 @@
         },
         "href": {
           "title": "Enlace",
-          "description": "Una ruta del sitio, como /precios, o una direccion que empiece con https://",
+          "description": "Una ruta del sitio, como /precios, o una direccion que empiece con https://. No vale //otro.com: lleva a otro sitio",
           "type": "string",
           "maxLength": 500,
-          "pattern": "^(/|https?://)"
+          "pattern": "^(/([^/\\\\\\s]|$)|https://)"
         }
       }
     }

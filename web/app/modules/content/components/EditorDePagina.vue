@@ -138,12 +138,13 @@ function avisarExito(titulo: string) {
 
 async function onGuardar() {
   if (!pagina.value || !borrador.value) return
+  const version = pagina.value.version
   guardando.value = true
   errores.value = {}
   aviso.value = null
   conflicto.value = null
   try {
-    const guardada = await props.guardar(pagina.value.version, cuerpoDeGuardado(borrador.value))
+    const guardada = await props.guardar(version, cuerpoDeGuardado(borrador.value))
     pagina.value = guardada
     borrador.value = borradorDe(guardada)
     recargaDelHistorial.value++
@@ -158,20 +159,34 @@ async function onGuardar() {
         traceId: causa.traceId,
       }
     } else if (causa instanceof ApiError && causa.status === 409) {
-      // Se lee la version actual solo para decir cuando se guardo; NO se
-      // aplica sobre lo que la persona tiene en pantalla.
-      conflicto.value = {}
-      props
-        .cargar()
-        .then((actual) => {
-          if (conflicto.value) conflicto.value = { guardadaEl: actual.updatedAt }
-        })
-        .catch(() => {})
+      await explicarConflicto(version)
     } else {
       avisar(causa, 'guardar la pagina')
     }
   } finally {
     guardando.value = false
+  }
+}
+
+// Un 409 al guardar es una de dos cosas, con el mismo `code`: otra persona
+// guardo en medio, o el slug ya lo usa otra pagina. Se relee para distinguirlas:
+// si la version no cambio, nadie guardo y el conflicto es el slug. No se decide
+// por el `detail`, que es texto para humanos y puede cambiar.
+//
+// Lo leido NO se aplica sobre lo que la persona tiene en pantalla: solo sirve
+// para decir que paso y cuando.
+async function explicarConflicto(version: number) {
+  try {
+    const actual = await props.cargar()
+    if (actual.version === version) {
+      errores.value = { slug: 'Ya hay otra pagina con esta direccion. Elige otra.' }
+      aviso.value = { titulo: 'Hay 1 campo por corregir', detalle: 'No se guardo nada. Lo que escribiste sigue aqui.' }
+    } else {
+      conflicto.value = { guardadaEl: actual.updatedAt }
+    }
+  } catch {
+    // Sin poder releer no se sabe cual fue; se dice lo mas prudente.
+    conflicto.value = {}
   }
 }
 

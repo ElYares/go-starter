@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import type { HeroContenido } from './tipos'
+import { esHrefSeguro } from './href'
 
 // La portada de una pagina. El enlace es un <a> y no un NuxtLink a proposito:
 // la landing tiene que funcionar sin JavaScript, y un bloque que no importa
 // nada de Nuxt se prueba sin su arnes.
+//
+// Un enlace que no pasa esHrefSeguro no se pinta: el boton desaparece antes que
+// mandar a quien visita la portada a otro dominio.
 defineProps<{ contenido: HeroContenido }>()
 </script>
 
@@ -11,7 +15,7 @@ defineProps<{ contenido: HeroContenido }>()
   <section class="hero">
     <h1>{{ contenido.title }}</h1>
     <p v-if="contenido.subtitle" class="bajada">{{ contenido.subtitle }}</p>
-    <a v-if="contenido.cta" class="cta" :href="contenido.cta.href">{{ contenido.cta.label }}</a>
+    <a v-if="contenido.cta && esHrefSeguro(contenido.cta.href)" class="cta" :href="contenido.cta.href">{{ contenido.cta.label }}</a>
   </section>
 </template>
 
