@@ -17,6 +17,13 @@ if ! git -C "$raiz" grep -q -e "$viejo" -- ':!docs'; then
   exit 0
 fi
 
+# Cada commit o fetch deja un `git maintenance run --auto --detach` que sigue
+# reempaquetando .git despues de que el comando vuelve (git 2.55: repack
+# geometrico). Si todavia escribe cuando la trampa corre `rm -rf`, sale con
+# "Directory not empty" y la prueba falla con todos los casos en verde (visto en
+# el job fork del CI, PR #32). Con la variable, lo hereda todo git que se corra.
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=maintenance.auto GIT_CONFIG_VALUE_0=false
+
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
