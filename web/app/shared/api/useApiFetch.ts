@@ -25,5 +25,9 @@ export function useApiFetch<T>(path: string, options: Record<string, unknown> = 
       )
     : {}
 
-  return useFetch<T>(path, { baseURL, headers, ...options })
+  // El key va explicito porque el de Nuxt incluye el baseURL, y aqui el baseURL
+  // cambia entre servidor y navegador: el cliente no encontraba en el payload lo
+  // que dejo el SSR, al hidratar no pedia nada (Nuxt lo deja para onBeforeMount)
+  // y la landing se cambiaba por "El sitio no esta disponible" con JavaScript.
+  return useFetch<T>(path, { baseURL, headers, key: `api:${path}`, ...options })
 }

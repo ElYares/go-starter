@@ -237,8 +237,14 @@ URLs. La lógica que no necesita a Nuxt vive en `modules/landing/pagina.ts`.
 | no responde, o responde `502`/`503`/`504` | `503` |
 | cualquier otra cosa | `500` |
 
-Tres trampas:
+Cuatro trampas:
 
+- **El key de `useFetch` no puede depender del `baseURL`.** El de Nuxt lo
+  incluye, y aqui el SSR sale por `http://api:8080` y el navegador por `/api/v1`:
+  el cliente no encontraba el payload, al hidratar no pedia nada (Nuxt lo deja
+  para `onBeforeMount`) y la landing se cambiaba por el 503 en todo navegador con
+  JavaScript. Con `curl` o sin JS se veia bien. Por eso `useApiFetch` pone
+  `key: api:<ruta>`, y `useApiFetch.spec.ts` lo sostiene
 - **`useFetch` pone `statusCode: 500` también cuando la API está apagada.** Nuxt
   envuelve el fallo de red en un `NuxtError` con 500 por omisión. Lo que
   distingue "no respondió" es la causa: `cause.response` existe solo si hubo
