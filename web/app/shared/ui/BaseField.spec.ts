@@ -76,6 +76,22 @@ describe('BaseField', () => {
     expect(montar({}).find('input').attributes('aria-describedby')).toBeUndefined()
   })
 
+  // Oculta a la vista, no al lector: sigue en el DOM y sigue apuntando al
+  // control. Un v-if o un display:none dejarian el campo sin nombre.
+  it('la etiqueta oculta sigue nombrando al control', () => {
+    const campo = montar({ labelOculta: true })
+    const etiqueta = campo.find('label')
+
+    expect(etiqueta.exists()).toBe(true)
+    expect(etiqueta.text()).toContain('Correo')
+    expect(etiqueta.classes()).toContain('solo-lector')
+    expect(etiqueta.attributes('for')).toBe(campo.find('input').attributes('id'))
+  })
+
+  it('sin labelOculta la etiqueta se ve', () => {
+    expect(montar({}).find('label').classes()).not.toContain('solo-lector')
+  })
+
   it('el error gana a la pista', () => {
     const campo = montar({ hint: 'una pista', error: 'un error' })
     expect(campo.text()).toContain('un error')
