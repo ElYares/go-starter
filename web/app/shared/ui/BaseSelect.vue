@@ -122,8 +122,19 @@ const marcador = computed(() => props.placeholder ?? 'Elegir…')
   color: var(--color-text-muted);
 }
 
-.panel {
+/* El panel va con :deep() porque Reka lo envuelve en un div posicionado que
+   es el que recibe el atributo del scoped, no el panel: con `.panel` a secas
+   la regla no se aplicaba nunca, y el panel salia sin fondo, debajo de lo que
+   tuviera z-index (la cabecera fija de una tabla) y tan alto como su lista.
+   Reka copia el z-index del panel a su envoltorio.
+
+   El alto se acota a lo que cabe bajo el disparador; con muchas opciones (las
+   150 hojas de un libro) la lista se desplaza dentro del panel. */
+:deep(.panel) {
+  z-index: 50;
   min-width: var(--reka-select-trigger-width);
+  max-height: min(20rem, var(--reka-select-content-available-height));
+  overflow-y: auto;
   padding: var(--space-1);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
