@@ -30,6 +30,16 @@
   --color-accent-strong: #1c4fd0;
   --color-on-accent: #ffffff;
 
+  /* El panel de marca del login: un relleno grande y saturado que no cambia con
+     el tema, porque es la imagen del proyecto y no una superficie. Por eso el
+     oscuro no lo redefine. Es el azul del circulo de la imagen de
+     assets/acceso/: si un fork cambia la imagen, cambia este color con ella.
+     --color-brand-deep es el pie del degradado sobre el que se lee el lema. */
+  --color-brand: #0c3390;
+  --color-brand-deep: #061a4a;
+  --color-on-brand: #ffffff;
+  --color-on-brand-muted: #c7d4ff;
+
   --color-ok: #157f4a;
   --color-danger: #b3261e;
 

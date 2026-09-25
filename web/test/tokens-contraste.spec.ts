@@ -44,6 +44,12 @@ const PARES: Array<[string, string]> = [
   ['--color-accent-strong', '--color-surface-hover'],
   ['--color-ok', '--color-surface-hover'],
   ['--color-danger', '--color-surface-hover'],
+  // El panel de marca del login: titulo y bajada encima del relleno y del pie
+  // del degradado, que es donde se leen.
+  ['--color-on-brand', '--color-brand'],
+  ['--color-on-brand-muted', '--color-brand'],
+  ['--color-on-brand', '--color-brand-deep'],
+  ['--color-on-brand-muted', '--color-brand-deep'],
 ]
 
 const MINIMO = 4.5

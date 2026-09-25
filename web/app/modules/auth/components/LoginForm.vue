@@ -14,6 +14,9 @@ const props = defineProps<{
 const email = ref('')
 const password = ref('')
 const enviando = ref(false)
+// Ver lo que se escribio antes de enviar: en un telefono, equivocarse en una
+// letra de la contrasena y no poder verla es la mitad de los 401.
+const verPassword = ref(false)
 // Los errores de campo no aparecen hasta el primer envio: gritarle "obligatorio"
 // a un campo que nadie ha tocado todavia es ruido.
 const intentado = ref(false)
@@ -67,27 +70,57 @@ async function enviar() {
        idioma del sistema y no pasa por BaseField, asi que el lector de pantalla
        oiria dos mensajes distintos para el mismo campo. -->
   <form class="login" novalidate @submit.prevent="enviar">
-    <BaseField label="Correo" required :error="errorEmail" v-slot="campo">
-      <BaseInput
-        v-model="email"
-        :id="campo.id"
-        :described-by="campo.describedBy"
-        :invalid="campo.invalid"
-        type="email"
-        autocomplete="username"
-        inputmode="email"
-      />
+    <!-- Las etiquetas se ocultan a la vista, no al lector: el icono y el
+         placeholder dicen que va en cada campo a quien ve la pantalla. -->
+    <BaseField label="Correo" label-oculta required :error="errorEmail" v-slot="campo">
+      <div class="con-icono">
+        <svg class="icono" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <path d="m3 7 9 6 9-6" />
+        </svg>
+        <BaseInput
+          v-model="email"
+          :id="campo.id"
+          :described-by="campo.describedBy"
+          :invalid="campo.invalid"
+          type="email"
+          autocomplete="username"
+          inputmode="email"
+          placeholder="Tu correo"
+        />
+      </div>
     </BaseField>
 
-    <BaseField label="Contrasena" required :error="errorPassword" v-slot="campo">
-      <BaseInput
-        v-model="password"
-        :id="campo.id"
-        :described-by="campo.describedBy"
-        :invalid="campo.invalid"
-        type="password"
-        autocomplete="current-password"
-      />
+    <BaseField label="Contrasena" label-oculta required :error="errorPassword" v-slot="campo">
+      <div class="con-icono con-accion">
+        <svg class="icono" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="11" width="16" height="10" rx="2" />
+          <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+        </svg>
+        <BaseInput
+          v-model="password"
+          :id="campo.id"
+          :described-by="campo.describedBy"
+          :invalid="campo.invalid"
+          :type="verPassword ? 'text' : 'password'"
+          autocomplete="current-password"
+          placeholder="Contrasena"
+        />
+        <!-- type="button": dentro de un form, un boton sin tipo envia. -->
+        <button
+          type="button"
+          class="accion"
+          :aria-label="verPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'"
+          :aria-pressed="verPassword"
+          @click="verPassword = !verPassword"
+        >
+          <svg class="icono-accion" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+            <circle cx="12" cy="12" r="3" />
+            <path v-if="verPassword" d="m4 4 16 16" />
+          </svg>
+        </button>
+      </div>
     </BaseField>
 
     <!-- role="alert" para que se anuncie al aparecer: tras un envio el foco
@@ -108,6 +141,74 @@ async function enviar() {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+/* Los campos del login van rellenos y sin borde, con el icono dentro. El
+   input es la raiz de BaseInput, asi que recibe el atributo scoped de aqui y
+   estas reglas le llegan sin :deep(). El borde se queda transparente y no se
+   quita: es el que se pinta en rojo cuando el campo es invalido. */
+.con-icono {
+  position: relative;
+}
+.con-icono input {
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-8) + var(--space-3));
+  background: var(--color-surface-hover);
+  border-color: transparent;
+  border-radius: var(--radius-md);
+}
+/* Esta regla pesa mas que la de BaseInput, asi que el rojo del invalido se
+   repite aqui o el transparente de arriba lo borra. */
+.con-icono input[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+.con-accion input {
+  padding-right: calc(var(--space-8) + var(--space-3));
+}
+.icono,
+.icono-accion {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.icono {
+  position: absolute;
+  left: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+.accion {
+  position: absolute;
+  right: var(--space-2);
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  padding: var(--space-1);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.accion:hover {
+  color: var(--color-text);
+}
+.accion:focus-visible {
+  outline: var(--focus-ring) solid var(--color-accent-strong);
+}
+
+/* El boton principal, mas alto y con un halo de su color. */
+.login .boton {
+  margin-top: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  box-shadow: 0 var(--space-2) var(--space-6) calc(var(--space-2) * -1) var(--color-accent);
 }
 .fallo {
   padding: var(--space-3);
