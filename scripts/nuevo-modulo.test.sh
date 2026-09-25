@@ -66,7 +66,7 @@ internal/modules/pedidos/module.go|"/pedidos", m\.listar|la ruta es /pedidos
 internal/modules/pedidos/migrations/0001_inicial.sql|create table pedidos_cosas|la tabla es pedidos_cosas
 internal/app/modules.go|^		pedidos\.New\(\),$|esta en el registro
 internal/app/modules.go|^	"$m/internal/modules/pedidos"$|esta importado
-internal/app/modules_test.go|"content", "pedidos"\}|esta en la lista esperada
+internal/app/modules_test.go|, "pedidos"\}$|esta al final de la lista esperada
 LISTA
 
 if grep -rq plantilla "$d"; then mal "queda 'plantilla' en el modulo: $(grep -rn plantilla "$d" | head -2)"; else ok "no queda 'plantilla'"; fi
