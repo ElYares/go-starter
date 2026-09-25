@@ -12,6 +12,7 @@ El starter existe para esto. Si forkear duele, el starter falló.
 | `internal/modules/<tu dominio>` | Todo tuyo |
 | `web/app/shared/blocks/**` | Se reemplazan por los bloques del proyecto |
 | `web/app/assets/tokens/**` | **Lo primero que se cambia.** Aquí vive la piel |
+| `web/app/assets/acceso/personaje.webp` | La imagen del login. Se reemplaza el archivo, y los textos del panel están en `modules/auth/views/LoginView.vue` |
 | `web/app/modules/landing` | Se rediseña libremente |
 | `web/app/modules/admin` | Se le agregan secciones, el shell se queda |
 
@@ -96,7 +97,7 @@ No cuentan en la hora, porque no son del starter:
 | 3 | Configurar | `cp .env.example .env`, `JWT_SIGNING_KEY` con `openssl rand -base64 48`, `SSR_SECRET` con `openssl rand -base64 32`, y `HOST_UID`/`HOST_GID` con `id -u`/`id -g` | | | |
 | 4 | Levantar | `devherd park "$PWD"`, `devherd up && devherd proxy apply` (pide sudo), hasta que `http://<nombre>.localhost/` muestre la landing con el nombre nuevo | | | |
 | 5 | Sembrar | `./scripts/seed.sh` y entrar en `/admin` con `superadmin@<nombre>.localhost` | | | |
-| 6 | La piel | En `web/app/assets/tokens/base.css`, el color de marca: `--color-accent`, `--color-accent-strong` y `--color-on-accent`, **en el bloque claro y en el oscuro**. Correr la prueba de contraste (abajo) hasta que pase, y ver el botón de la portada con el color nuevo | | | |
+| 6 | La piel | En `web/app/assets/tokens/base.css`, el color de marca: `--color-accent`, `--color-accent-strong` y `--color-on-accent`, **en el bloque claro y en el oscuro**. El panel del login tiene sus tokens aparte: `--color-brand` (el color de la imagen), `--color-brand-deep`, `--color-on-brand` y `--color-on-brand-muted`, junto con `web/app/assets/acceso/personaje.webp`. Correr la prueba de contraste (abajo) hasta que pase, y ver el botón de la portada con el color nuevo | | | |
 | 7 | La marca | `/admin` → Configuración: `site.brand` (nombre y logo), `site.nav` (al menos un enlace más) y `site.footer` | | | |
 | 8 | La portada | `/admin` → Páginas → la portada: cambiar el título del hero, **Guardar** y **Publicar** | | | |
 | 9 | Comprobar | El bloque de abajo, sin JavaScript | | | |

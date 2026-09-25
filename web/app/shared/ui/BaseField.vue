@@ -16,6 +16,10 @@ const props = defineProps<{
   hint?: string
   error?: string
   required?: boolean
+  // La etiqueta se oculta a la vista pero se queda para el lector de pantalla:
+  // un campo sin etiqueta no dice que pide, y el placeholder no la sustituye
+  // (desaparece al escribir y muchos lectores no lo anuncian).
+  labelOculta?: boolean
 }>()
 
 const id = useId()
@@ -31,7 +35,7 @@ const describedBy = computed(
 
 <template>
   <div class="campo">
-    <Label :for="id" class="etiqueta">
+    <Label :for="id" class="etiqueta" :class="{ 'solo-lector': labelOculta }">
       {{ label }}
       <span v-if="required" class="obligatorio" aria-hidden="true">*</span>
     </Label>
@@ -55,6 +59,16 @@ const describedBy = computed(
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-text);
+}
+/* No es display:none: eso la esconde tambien del lector de pantalla, que es
+   justo para quien se queda. */
+.solo-lector {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .obligatorio {
   color: var(--color-danger);

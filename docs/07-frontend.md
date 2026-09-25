@@ -86,6 +86,7 @@ sin arrastrar el framework.
   --color-bg: …;         --color-surface: …;   --color-surface-hover: …;
   --color-text: …;       --color-text-muted: …;
   --color-accent: …;     --color-accent-strong: …;  --color-on-accent: …;
+  --color-brand: …;      --color-brand-deep: …;     --color-on-brand: …;   --color-on-brand-muted: …;  /* el panel del login */
   --color-border: …;     --color-ok: …;        --color-danger: …;
   --color-scrim: …;      /* el velo detrás de un diálogo */
   --font-sans: …;        --font-mono: …;
@@ -110,7 +111,7 @@ Las dos están probadas, y por una razón concreta: `--color-accent` sobre
 primer fork que meta su color de marca lo rompe, y no hay ningún síntoma visible.
 
 - `test/tokens-contraste.spec.ts` lee el CSS de verdad —no una copia— y mide los
-  17 pares en los dos temas contra 4.5:1. Un fondo nuevo sin su par de texto no
+  21 pares en los dos temas contra 4.5:1. Un fondo nuevo sin su par de texto no
   es un olvido: es un par que falta en esa lista
 - `test/tokens-sin-literales.spec.ts` falla si un `.vue` de `app/` escribe un
   color, un espacio o un radio a mano. El grosor de un borde (`1px`) sí se

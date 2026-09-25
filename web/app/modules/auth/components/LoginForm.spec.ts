@@ -66,11 +66,11 @@ describe('LoginForm', () => {
     await w.find('form').trigger('submit')
 
     expect(entrar).toHaveBeenCalledTimes(1)
-    expect(w.find('button').attributes('aria-busy')).toBe('true')
+    expect(w.find('button[type="submit"]').attributes('aria-busy')).toBe('true')
 
     soltar()
     await flushPromises()
-    expect(w.find('button').attributes('aria-busy')).toBeUndefined()
+    expect(w.find('button[type="submit"]').attributes('aria-busy')).toBeUndefined()
   })
 
   it('un 401 se anuncia con el mensaje generico, borra la contrasena y conserva el correo', async () => {
@@ -162,7 +162,7 @@ describe('LoginForm', () => {
     expect(errores).toHaveLength(1)
     expect(errores[0]).toBeInstanceOf(RangeError)
     // El boton no se queda girando para siempre.
-    expect(w.find('button').attributes('aria-busy')).toBeUndefined()
+    expect(w.find('button[type="submit"]').attributes('aria-busy')).toBeUndefined()
   })
 
   it('los campos llevan el autocompletado que usan los gestores de contrasenas', () => {
@@ -170,5 +170,47 @@ describe('LoginForm', () => {
 
     expect(w.find('input[type="email"]').attributes('autocomplete')).toBe('username')
     expect(w.find('input[type="password"]').attributes('autocomplete')).toBe('current-password')
+  })
+
+  it('el boton del ojo muestra y oculta la contrasena, y dice en que estado esta', async () => {
+    const w = montar(vi.fn())
+    const ojo = w.find('button[type="button"]')
+
+    expect(ojo.attributes('aria-pressed')).toBe('false')
+    expect(ojo.attributes('aria-label')).toBe('Mostrar contrasena')
+
+    await ojo.trigger('click')
+    const campo = w.find('input[autocomplete="current-password"]')
+    expect(campo.attributes('type')).toBe('text')
+    expect(ojo.attributes('aria-pressed')).toBe('true')
+    expect(ojo.attributes('aria-label')).toBe('Ocultar contrasena')
+
+    await ojo.trigger('click')
+    expect(campo.attributes('type')).toBe('password')
+  })
+
+  it('el boton del ojo no envia el formulario', async () => {
+    const entrar = vi.fn(async () => {})
+    const w = montar(entrar)
+    await w.find('input[type="email"]').setValue('ana@casa.com')
+    await w.find('input[type="password"]').setValue('una-contrasena-larga')
+
+    await w.find('button[type="button"]').trigger('click')
+    await flushPromises()
+
+    expect(entrar).not.toHaveBeenCalled()
+  })
+
+  it('las etiquetas se ocultan a la vista pero nombran cada campo', () => {
+    const w = montar(vi.fn())
+    const campos = [
+      ['Correo', 'input[type="email"]'],
+      ['Contrasena', 'input[type="password"]'],
+    ] as const
+    for (const [etiqueta, selector] of campos) {
+      const label = w.findAll('label').find((l) => l.text().includes(etiqueta))!
+      expect(label.classes()).toContain('solo-lector')
+      expect(label.attributes('for')).toBe(w.find(selector).attributes('id'))
+    }
   })
 })
