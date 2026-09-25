@@ -203,7 +203,11 @@ describe('LoginForm', () => {
 
   it('las etiquetas se ocultan a la vista pero nombran cada campo', () => {
     const w = montar(vi.fn())
-    for (const [etiqueta, selector] of [['Correo', 'input[type="email"]'], ['Contrasena', 'input[type="password"]']]) {
+    const campos = [
+      ['Correo', 'input[type="email"]'],
+      ['Contrasena', 'input[type="password"]'],
+    ] as const
+    for (const [etiqueta, selector] of campos) {
       const label = w.findAll('label').find((l) => l.text().includes(etiqueta))!
       expect(label.classes()).toContain('solo-lector')
       expect(label.attributes('for')).toBe(w.find(selector).attributes('id'))
