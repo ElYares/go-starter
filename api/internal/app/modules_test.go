@@ -58,7 +58,7 @@ func TestLasRutasDeUnModuloQuedanMontadas(t *testing.T) {
 func TestUnaRutaConPermisoNoDeclaradoImpideArrancar(t *testing.T) {
 	mod := moduloFalso{
 		nombre:  "demo",
-		permisT: []rbac.Permission{{Key: "demo.read"}},
+		permisT: []rbac.Permission{{Key: "demo.read", Area: "Demo"}},
 		rutas: func(r *httpx.Router) {
 			// Con una errata: se declaro demo.read, no demo.raed.
 			r.Get("/api/v1/demo", func(http.ResponseWriter, *http.Request) {}, rbac.Require("demo.raed"))
@@ -83,8 +83,8 @@ func TestDosModulosNoPuedenDeclararElMismoPermiso(t *testing.T) {
 	a := &App{log: loggerDePrueba()}
 
 	err := a.montar([]Module{
-		moduloFalso{nombre: "uno", permisT: []rbac.Permission{{Key: "comun.read"}}, rutas: sinRutas},
-		moduloFalso{nombre: "dos", permisT: []rbac.Permission{{Key: "comun.read"}}, rutas: sinRutas},
+		moduloFalso{nombre: "uno", permisT: []rbac.Permission{{Key: "comun.read", Area: "Comun"}}, rutas: sinRutas},
+		moduloFalso{nombre: "dos", permisT: []rbac.Permission{{Key: "comun.read", Area: "Comun"}}, rutas: sinRutas},
 	})
 
 	if err == nil {

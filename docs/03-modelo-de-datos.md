@@ -31,6 +31,7 @@ roles (id uuid pk, key text unique, name text)          -- superadmin, admin, st
 permissions (
   key text pk,
   description text not null,
+  area text not null default '',            -- la declara el módulo; agrupa la vista de roles
   sensitive boolean not null default false  -- lo marca el módulo. Ver abajo
 )
 role_permissions (role_id, permission_key)              -- pk compuesta, on delete cascade
@@ -82,7 +83,10 @@ Siete cosas que no son obvias:
 - **`Sensitive` lo decide el módulo que inventa el permiso**, en su
   `Permissions()`, porque es el único que sabe qué hace. Una lista en la siembra
   —"todo lo que empiece por `identity.`"— habría que editarla desde fuera cada
-  vez que un fork agrega un dominio con operaciones delicadas propias
+  vez que un fork agrega un dominio con operaciones delicadas propias. **`Area`
+  tambien**, por la misma razon: un diccionario de prefijos en el frontend
+  habria que editarlo con cada modulo nuevo. La siembra la reconcilia como la
+  descripcion, y un permiso sin area impide arrancar (`rbac.NewRegistry`)
 - **La tabla la guarda el módulo que la posee, y `app` lo descubre por
   interfaz** (`CatalogoDePermisos`), no por el nombre del paquete. Un fork que
   borre `identity` sigue compilando y simplemente no siembra nada

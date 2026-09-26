@@ -60,21 +60,24 @@ func (m *Module) Service() *Service { return m.svc }
 
 func (m *Module) Name() string { return "identity" }
 
+// area agrupa los permisos de este modulo en la vista de roles.
+const area = "Usuarios y roles"
+
 func (m *Module) Permissions() []rbac.Permission {
 	// Los cuatro primeros van marcados como sensibles: son los que reparten poder en vez
 	// de usarlo. Quien pueda asignar roles puede darse a si mismo cualquier
 	// permiso, asi que concederlos al rol `admin` haria de `admin` un
 	// superadmin con otro nombre y la separacion no separaria nada.
 	return []rbac.Permission{
-		{Key: "identity.user.read", Desc: "Ver las cuentas y sus roles", Sensitive: true},
-		{Key: "identity.user.write", Desc: "Crear cuentas, cambiar sus datos y deshabilitarlas", Sensitive: true},
-		{Key: "identity.role.read", Desc: "Ver los roles y que permisos concede cada uno", Sensitive: true},
-		{Key: "identity.role.assign", Desc: "Asignar y quitar roles a una cuenta", Sensitive: true},
+		{Key: "identity.user.read", Desc: "Ver las cuentas y sus roles", Area: area, Sensitive: true},
+		{Key: "identity.user.write", Desc: "Crear cuentas, cambiar sus datos y deshabilitarlas", Area: area, Sensitive: true},
+		{Key: "identity.role.read", Desc: "Ver los roles y que permisos concede cada uno", Area: area, Sensitive: true},
+		{Key: "identity.role.assign", Desc: "Asignar y quitar roles a una cuenta", Area: area, Sensitive: true},
 		// Este NO es sensible, y por eso lo recibe el admin: asignar una
 		// contrasena temporal es poder entrar como esa cuenta, pero la regla de
 		// poder (repo_contrasena.go) impide hacerlo con quien tenga algun permiso
 		// que el actor no tenga. Asi no se reparte poder que no se tenga ya.
-		{Key: "identity.user.password", Desc: "Ver las solicitudes de contrasena y asignar contrasenas temporales a cuentas con menos poder"},
+		{Key: "identity.user.password", Desc: "Ver las solicitudes de contrasena y asignar contrasenas temporales a cuentas con menos poder", Area: area},
 	}
 }
 

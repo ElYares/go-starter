@@ -71,10 +71,10 @@ func (r *repoFalso) habilitar(_ context.Context, id string) (Usuario, error) {
 
 func (r *repoFalso) catalogoDeRoles(_ context.Context, p paging.Params) ([]RolConPermisos, int64, error) {
 	todos := []RolConPermisos{
-		{Key: RolAdmin, Name: "Administracion", Permisos: []rbac.Permission{{Key: "content.page.read", Desc: "Ver"}}},
+		{Key: RolAdmin, Name: "Administracion", Permisos: []rbac.Permission{{Key: "content.page.read", Desc: "Ver", Area: "Paginas"}}},
 		{Key: RolSuperadmin, Name: "Superadministracion", Permisos: []rbac.Permission{
-			{Key: "content.page.read", Desc: "Ver"},
-			{Key: "identity.role.assign", Desc: "Repartir", Sensitive: true},
+			{Key: "content.page.read", Desc: "Ver", Area: "Paginas"},
+			{Key: "identity.role.assign", Desc: "Repartir", Area: "Usuarios y roles", Sensitive: true},
 		}},
 		{Key: RolViewer, Name: "Solo lectura"},
 	}
@@ -576,6 +576,9 @@ func TestListarRolesMarcaLosSensiblesYNuncaDaNull(t *testing.T) {
 	for _, p := range super.Permissions {
 		if (p.Key == "identity.role.assign") != p.Sensitive {
 			t.Errorf("%s: sensitive = %v", p.Key, p.Sensitive)
+		}
+		if p.Area == "" {
+			t.Errorf("%s salio sin area", p.Key)
 		}
 	}
 }

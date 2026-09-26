@@ -327,12 +327,14 @@ func (r *Repo) porQueNoDeshabilite(ctx context.Context, userID string) (Usuario,
 func (r *Repo) SembrarPermisos(ctx context.Context, perms []rbac.Permission) error {
 	claves := make([]string, len(perms))
 	descripciones := make([]string, len(perms))
+	areas := make([]string, len(perms))
 	sensibles := make([]bool, len(perms))
 	var noSensibles []string
 
 	for i, p := range perms {
 		claves[i] = p.Key
 		descripciones[i] = p.Desc
+		areas[i] = p.Area
 		sensibles[i] = p.Sensitive
 		if !p.Sensitive {
 			noSensibles = append(noSensibles, p.Key)
@@ -347,12 +349,13 @@ func (r *Repo) SembrarPermisos(ctx context.Context, perms []rbac.Permission) err
 
 	// Alta y actualizacion en una: volver a arrancar no duplica, y cambiar la
 	// descripcion de un permiso se refleja sin migracion.
-	const upsert = `insert into permissions (key, description, sensitive)
-			select k, d, s from unnest($1::text[], $2::text[], $3::boolean[]) as t(k, d, s)
+	const upsert = `insert into permissions (key, description, area, sensitive)
+			select k, d, a, s from unnest($1::text[], $2::text[], $3::text[], $4::boolean[]) as t(k, d, a, s)
 			on conflict (key) do update
 			   set description = excluded.description,
+			       area        = excluded.area,
 			       sensitive   = excluded.sensitive`
-	if _, err := tx.Exec(ctx, upsert, claves, descripciones, sensibles); err != nil {
+	if _, err := tx.Exec(ctx, upsert, claves, descripciones, areas, sensibles); err != nil {
 		return err
 	}
 

@@ -299,6 +299,9 @@ func TestIntegracionLosRolesTraenSusPermisosConLosSensiblesMarcados(t *testing.T
 		if p.Key == "identity.role.assign" {
 			sensible = p.Sensitive
 		}
+		if p.Area == "" {
+			t.Errorf("%s salio de la base sin area", p.Key)
+		}
 	}
 	if !sensible {
 		t.Errorf("identity.role.assign no salio marcado como sensible en el superadmin: %+v", super.Permisos)

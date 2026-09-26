@@ -46,11 +46,17 @@ func (m *Module) Name() string { return "content" }
 // `Sensitive` marca lo que reparte poder en vez de usarlo: solo el rol
 // `superadmin` lo recibe. Lo decide este módulo porque es el único que
 // sabe qué hace cada permiso suyo.
+//
+// `Area` es obligatoria: la parte del sitio a la que pertenece el permiso, en
+// palabras de quien usa el dashboard. La pantalla de roles agrupa por ella, y
+// sin area el api no arranca.
+const area = "Paginas"
+
 func (m *Module) Permissions() []rbac.Permission {
     return []rbac.Permission{
-        {Key: "content.page.read",    Desc: "Ver páginas"},
-        {Key: "content.page.write",   Desc: "Crear y editar páginas"},
-        {Key: "content.page.publish", Desc: "Publicar una versión"},
+        {Key: "content.page.read",    Desc: "Ver páginas",            Area: area},
+        {Key: "content.page.write",   Desc: "Crear y editar páginas", Area: area},
+        {Key: "content.page.publish", Desc: "Publicar una versión",   Area: area},
     }
 }
 

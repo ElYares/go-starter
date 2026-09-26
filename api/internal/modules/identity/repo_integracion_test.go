@@ -208,13 +208,13 @@ func catalogoIntacto(t *testing.T, r *Repo) {
 	t.Helper()
 	ctx := context.Background()
 
-	rows, err := r.pool.Query(ctx, `select key, description, sensitive from permissions order by key`)
+	rows, err := r.pool.Query(ctx, `select key, description, area, sensitive from permissions order by key`)
 	if err != nil {
 		t.Fatalf("leyendo el catalogo: %v", err)
 	}
 	previos, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (rbac.Permission, error) {
 		var p rbac.Permission
-		err := row.Scan(&p.Key, &p.Desc, &p.Sensitive)
+		err := row.Scan(&p.Key, &p.Desc, &p.Area, &p.Sensitive)
 		return p, err
 	})
 	rows.Close()
@@ -285,9 +285,9 @@ func reponerFilasDeRol(t *testing.T, r *Repo, tabla string, filas []filaDeRol) {
 // Uno de cada clase, que es lo que hace comprobable el reparto entre los dos
 // roles: el sensible es solo del superadmin, el otro llega tambien al admin.
 var permisosDePrueba = []rbac.Permission{
-	{Key: "prueba.integracion.leer", Desc: "Ver"},
-	{Key: "prueba.integracion.escribir", Desc: "Escribir"},
-	{Key: "prueba.integracion.repartir", Desc: "Repartir poder", Sensitive: true},
+	{Key: "prueba.integracion.leer", Desc: "Ver", Area: "Pruebas"},
+	{Key: "prueba.integracion.escribir", Desc: "Escribir", Area: "Pruebas"},
+	{Key: "prueba.integracion.repartir", Desc: "Repartir poder", Area: "Pruebas", Sensitive: true},
 }
 
 var noSensiblesDePrueba = []string{"prueba.integracion.escribir", "prueba.integracion.leer"}
@@ -332,6 +332,41 @@ func TestIntegracionSembrarLosPermisosDosVecesNoDuplicaNada(t *testing.T) {
 	}
 }
 
+// El area se reconcilia igual que la descripcion: la manda el modulo en cada
+// arranque. Sin el `set area` del upsert, un modulo que renombre su area la
+// seguiria viendo con el nombre viejo para siempre.
+func TestIntegracionSembrarGuardaYActualizaElArea(t *testing.T) {
+	r := &Repo{pool: pool(t)}
+	catalogoIntacto(t, r)
+	ctx := context.Background()
+
+	areaDe := func() string {
+		t.Helper()
+		var area string
+		if err := r.pool.QueryRow(ctx,
+			`select area from permissions where key = 'prueba.integracion.leer'`).Scan(&area); err != nil {
+			t.Fatalf("leyendo el area: %v", err)
+		}
+		return area
+	}
+
+	if err := r.SembrarPermisos(ctx, permisosDePrueba); err != nil {
+		t.Fatalf("sembrando: %v", err)
+	}
+	if got := areaDe(); got != "Pruebas" {
+		t.Errorf("area = %q, quiero Pruebas", got)
+	}
+
+	renombrado := slices.Clone(permisosDePrueba)
+	renombrado[0].Area = "Pruebas renombradas"
+	if err := r.SembrarPermisos(ctx, renombrado); err != nil {
+		t.Fatalf("resembrando: %v", err)
+	}
+	if got := areaDe(); got != "Pruebas renombradas" {
+		t.Errorf("tras resembrar, area = %q; el upsert no la actualiza", got)
+	}
+}
+
 // La otra mitad de la reconciliacion. Es lo que impide que borrar un modulo
 // deje filas nombrando permisos que ya no existen, y roles que los conceden.
 func TestIntegracionSembrarBorraLosPermisosQueYaNadieDeclara(t *testing.T) {
@@ -340,7 +375,7 @@ func TestIntegracionSembrarBorraLosPermisosQueYaNadieDeclara(t *testing.T) {
 	ctx := context.Background()
 
 	conElViejo := append(slices.Clone(permisosDePrueba),
-		rbac.Permission{Key: "prueba.integracion.modulo.borrado", Desc: "De un modulo que ya no esta"})
+		rbac.Permission{Key: "prueba.integracion.modulo.borrado", Desc: "De un modulo que ya no esta", Area: "Pruebas"})
 	if err := r.SembrarPermisos(ctx, conElViejo); err != nil {
 		t.Fatalf("sembrando: %v", err)
 	}
@@ -477,8 +512,8 @@ func TestIntegracionElAdminRecibeLosPermisosDeUnModuloNuevo(t *testing.T) {
 	}
 
 	conElNuevo := append(slices.Clone(permisosDePrueba),
-		rbac.Permission{Key: "prueba.integracion.nuevo.usar", Desc: "De un modulo que llega despues"},
-		rbac.Permission{Key: "prueba.integracion.nuevo.repartir", Desc: "Delicado", Sensitive: true})
+		rbac.Permission{Key: "prueba.integracion.nuevo.usar", Desc: "De un modulo que llega despues", Area: "Pruebas"},
+		rbac.Permission{Key: "prueba.integracion.nuevo.repartir", Desc: "Delicado", Area: "Pruebas", Sensitive: true})
 	if err := r.SembrarPermisos(ctx, conElNuevo); err != nil {
 		t.Fatalf("siembra con el modulo nuevo: %v", err)
 	}

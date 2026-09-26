@@ -1183,6 +1183,12 @@ export interface components {
             key: string;
             description: string;
             /**
+             * @description La parte del sitio a la que pertenece, en palabras de quien usa el
+             *     dashboard. La declara el modulo del permiso; nunca es vacia.
+             * @example Paginas
+             */
+            area: string;
+            /**
              * @description Lo marca el modulo que declara el permiso: reparte poder en vez de
              *     usarlo.
              */

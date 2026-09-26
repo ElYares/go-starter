@@ -170,6 +170,9 @@ type Perfil struct {
 
 // PermisoConcedido defines model for PermisoConcedido.
 type PermisoConcedido struct {
+	// Area La parte del sitio a la que pertenece, en palabras de quien usa el
+	// dashboard. La declara el modulo del permiso; nunca es vacia.
+	Area        string `json:"area"`
 	Description string `json:"description"`
 	Key         string `json:"key"`
 

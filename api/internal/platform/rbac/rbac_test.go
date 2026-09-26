@@ -3,6 +3,7 @@ package rbac_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/elyares/go-starter/api/internal/platform/httpx"
@@ -81,6 +82,21 @@ func TestVerifyRoutesIgnoraLasRutasPublicas(t *testing.T) {
 	rutas := []httpx.Route{{Method: "GET", Pattern: "/api/v1/public/x", Permission: ""}}
 	if err := rbac.VerifyRoutes(rutas, reg); err != nil {
 		t.Errorf("una ruta sin permiso es publica y no tiene que fallar: %v", err)
+	}
+}
+
+// Sin area, la vista de roles pondria el permiso bajo un titulo vacio. Es un
+// olvido del modulo que lo declara, y se ve mejor al arrancar que en pantalla.
+func TestNewRegistryRechazaUnPermisoSinArea(t *testing.T) {
+	_, err := rbac.NewRegistry([]rbac.Permission{
+		{Key: "cosa.read", Desc: "Ver", Area: "Cosas"},
+		{Key: "cosa.write", Desc: "Escribir"},
+	})
+	if err == nil {
+		t.Fatal("un permiso sin area tenia que impedir el registro")
+	}
+	if !strings.Contains(err.Error(), "cosa.write") {
+		t.Errorf("el error tiene que nombrar el permiso culpable; dijo: %v", err)
 	}
 }
 

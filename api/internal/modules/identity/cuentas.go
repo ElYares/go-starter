@@ -124,7 +124,7 @@ func (m *Module) ListarRoles(w http.ResponseWriter, r *http.Request, _ ListarRol
 	for i, rol := range pagina.Content {
 		permisos := make([]PermisoConcedido, len(rol.Permisos))
 		for j, p := range rol.Permisos {
-			permisos[j] = PermisoConcedido{Key: p.Key, Description: p.Desc, Sensitive: p.Sensitive}
+			permisos[j] = PermisoConcedido{Key: p.Key, Description: p.Desc, Area: p.Area, Sensitive: p.Sensitive}
 		}
 		roles[i] = Rol{Key: rol.Key, Name: rol.Name, Permissions: permisos}
 	}
