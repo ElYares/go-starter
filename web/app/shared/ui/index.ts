@@ -4,6 +4,7 @@
 export { default as BaseBadge } from './BaseBadge.vue'
 export { default as BaseButton } from './BaseButton.vue'
 export { default as BaseDialog } from './BaseDialog.vue'
+export { default as BaseDrawer } from './BaseDrawer.vue'
 export { default as BaseEmptyState } from './BaseEmptyState.vue'
 export { default as BaseField } from './BaseField.vue'
 export { default as BaseInput } from './BaseInput.vue'
