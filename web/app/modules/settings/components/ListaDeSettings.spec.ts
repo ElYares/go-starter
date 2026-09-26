@@ -175,3 +175,64 @@ describe('la lista enlaza cada clave a su editor', () => {
     ])
   })
 })
+
+// Con los esquemas REALES del api: el nombre, la descripcion y los title de los
+// campos salen de settings/esquemas/, no de la clave.
+describe('cada tarjeta se lee sin saber de JSON', () => {
+  const tarjeta = (w: ReturnType<typeof montar>, clave: string) =>
+    w.findAll('.tarjeta').find((t) => t.find('.pie code').text() === clave)!
+
+  it('lleva el nombre y la descripcion del esquema, y la clave al pie', async () => {
+    const w = montar(async () => pagina([setting('site.brand', { value: { name: 'go-starter', tagline: 'Una landing' } })]))
+    await flushPromises()
+
+    const t = tarjeta(w, 'site.brand')
+    expect(t.find('h2').text()).toBe('Marca')
+    expect(t.find('.descripcion').text()).toContain('El nombre del sitio')
+    expect(t.find('.pie').text()).toContain('Actualizada el 13 sep 2026')
+  })
+
+  it('dice cada campo con su nombre, y lo vacio como vacio', async () => {
+    const w = montar(async () => pagina([setting('site.brand', { value: { name: 'go-starter' } })]))
+    await flushPromises()
+
+    const pares = tarjeta(w, 'site.brand')
+      .findAll('.valor')
+      .map((v) => [v.find('dt').text(), v.find('dd').text()])
+    expect(pares).toEqual([
+      ['Nombre', 'go-starter'],
+      ['Lema', 'Sin definir'],
+      ['Logo', 'Sin imagen'],
+    ])
+    expect(tarjeta(w, 'site.brand').text()).not.toContain('{"name"')
+  })
+
+  it('un color se ve como color, con su hex', async () => {
+    const w = montar(async () => pagina([setting('site.theme', { value: { accent: '#2f6df6' } })]))
+    await flushPromises()
+
+    const t = tarjeta(w, 'site.theme')
+    expect(t.find('h2').text()).toBe('Tema')
+    expect(t.find<HTMLElement>('.muestra').element.style.background).toMatch(/#2f6df6|rgb\(47, 109, 246\)/)
+    expect(t.find('dd').text()).toBe('#2f6df6')
+  })
+
+  it('la navegacion nombra sus enlaces, sin un par al que le falte el nombre', async () => {
+    const w = montar(async () => pagina([setting('site.nav', { value: [{ label: 'Inicio', href: '/' }] })]))
+    await flushPromises()
+
+    const t = tarjeta(w, 'site.nav')
+    expect(t.find('dl').exists()).toBe(false)
+    expect(t.find('.suelto').text()).toBe('Inicio')
+  })
+
+  it('una clave sin esquema se nombra con la clave y muestra su JSON', async () => {
+    const w = montar(async () => pagina([setting('mail.from', { value: { a: 1 } })]))
+    await flushPromises()
+
+    const t = tarjeta(w, 'mail.from')
+    expect(t.find('h2').text()).toBe('mail.from')
+    expect(t.find('.suelto code').text()).toBe('{"a":1}')
+  })
+})
+
