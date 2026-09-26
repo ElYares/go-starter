@@ -37,13 +37,16 @@ func New(pool *pgxpool.Pool, store storage.Store) *Module {
 
 func (m *Module) Name() string { return "media" }
 
+// area agrupa los permisos de este modulo en la vista de roles.
+const area = "Imagenes"
+
 // Ninguno es sensible: subir una imagen opera el sitio, no reparte poder. Con
 // la Decision 023, el admin de una instalacion que ya existia los recibe en el
 // siguiente despliegue.
 func (m *Module) Permissions() []rbac.Permission {
 	return []rbac.Permission{
-		{Key: "media.read", Desc: "Ver los datos de las imagenes subidas"},
-		{Key: "media.upload", Desc: "Subir imagenes"},
+		{Key: "media.read", Desc: "Ver los datos de las imagenes subidas", Area: area},
+		{Key: "media.upload", Desc: "Subir imagenes", Area: area},
 	}
 }
 

@@ -2065,10 +2065,16 @@ components:
 
     PermisoConcedido:
       type: object
-      required: [key, description, sensitive]
+      required: [key, description, area, sensitive]
       properties:
         key: { type: string, example: content.page.publish }
         description: { type: string }
+        area:
+          type: string
+          example: Paginas
+          description: |
+            La parte del sitio a la que pertenece, en palabras de quien usa el
+            dashboard. La declara el modulo del permiso; nunca es vacia.
         sensitive:
           type: boolean
           description: |

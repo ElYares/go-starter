@@ -21,6 +21,13 @@ type Permission struct {
 	Key  string
 	Desc string
 
+	// Area es la parte del sitio a la que pertenece, en palabras de quien usa
+	// el dashboard: "Paginas", "Imagenes". La vista de roles agrupa por ella.
+	// La pone el modulo por la misma razon que Sensitive: un diccionario de
+	// prefijos en el frontend habria que editarlo desde fuera con cada modulo
+	// nuevo, y mientras nadie lo hiciera el fork veria `orders` a secas.
+	Area string
+
 	// Sensitive marca lo que reparte poder en vez de usarlo: crear cuentas,
 	// asignar roles, conceder permisos. Solo el rol `superadmin` los recibe al
 	// sembrar; el rol `admin` recibe el resto.
@@ -117,6 +124,11 @@ func NewRegistry(perms []Permission) (*Registry, error) {
 	for _, p := range perms {
 		if p.Key == "" {
 			return nil, fmt.Errorf("rbac: hay un permiso sin clave")
+		}
+		if p.Area == "" {
+			// Sin area, la vista de roles lo pondria bajo un titulo vacio. Es
+			// un olvido del modulo, y se ve mejor al arrancar que en pantalla.
+			return nil, fmt.Errorf("rbac: el permiso %q no dice a que area pertenece", p.Key)
 		}
 		if _, repetido := byKey[p.Key]; repetido {
 			// Dos modulos peleando por la misma clave es ambiguo, y el que gane

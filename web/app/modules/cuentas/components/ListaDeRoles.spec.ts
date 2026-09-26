@@ -10,28 +10,62 @@ const pagina = (content: Schemas['Rol'][]): Schemas['RolesPage'] => ({
   page: { number: 0, size: 100, totalElements: content.length, totalPages: 1 },
 })
 
+const leer = { key: 'content.page.read', description: 'Ver las paginas', area: 'Paginas', sensitive: false }
+const asignar = { key: 'identity.role.assign', description: 'Asignar roles', area: 'Usuarios y roles', sensitive: true }
+
 const roles = pagina([
-  {
-    key: 'superadmin',
-    name: 'Superadministracion',
-    permissions: [
-      { key: 'content.page.read', description: 'Ver las paginas', sensitive: false },
-      { key: 'identity.role.assign', description: 'Asignar roles', sensitive: true },
-    ],
-  },
+  { key: 'admin', name: 'Administracion', permissions: [leer] },
+  { key: 'superadmin', name: 'Superadministracion', permissions: [leer, asignar] },
   { key: 'viewer', name: 'Solo lectura', permissions: [] },
 ])
 
-describe('ListaDeRoles', () => {
-  it('muestra lo que concede cada rol y marca solo lo sensible', async () => {
-    const w = mount(ListaDeRoles, { props: { cargar: async () => roles } })
-    await flushPromises()
+async function montar(datos = roles) {
+  const w = mount(ListaDeRoles, { props: { cargar: async () => datos } })
+  await flushPromises()
+  return w
+}
 
+describe('ListaDeRoles', () => {
+  it('agrupa los permisos por area y pone la frase antes que la clave', async () => {
+    const w = await montar()
     const super_ = w.find('[data-rol="superadmin"]')
-    expect(super_.text()).toContain('identity.role.assign')
-    expect(super_.findAll('li')[0]!.text()).not.toContain('Reparte poder')
-    expect(super_.findAll('li')[1]!.text()).toContain('Reparte poder')
-    expect(w.find('[data-rol="viewer"]').text()).toContain('No concede ningun permiso')
+
+    expect(super_.findAll('h3').map((h) => h.text())).toEqual(['Paginas', 'Usuarios y roles'])
+    const fila = super_.find('[data-area="Paginas"] [data-permiso="content.page.read"]')
+    expect(fila.text().indexOf('Ver las paginas')).toBeLessThan(fila.text().indexOf('content.page.read'))
+  })
+
+  it('resume cada rol: todo, una parte con lo que falta, o nada', async () => {
+    const w = await montar()
+
+    expect(w.find('[data-rol="superadmin"] [data-alcance]').text()).toBe('Puede todo lo que hay en el dashboard.')
+    expect(w.find('[data-rol="admin"] [data-alcance]').text()).toContain('Le faltan 1 de 2 permisos, de Usuarios y roles')
+    expect(w.find('[data-rol="viewer"] [data-alcance]').text()).toContain('no ve ninguna seccion')
+    expect(w.find('[data-rol="viewer"] [data-area]').exists()).toBe(false)
+  })
+
+  it('a un rol parcial le muestra lo que no tiene, marcado y dicho para el lector', async () => {
+    const w = await montar()
+    const falta = w.find('[data-rol="admin"] [data-permiso="identity.role.assign"]')
+
+    expect(falta.attributes('data-concedido')).toBe('false')
+    expect(falta.classes()).toContain('falta')
+    expect(falta.find('.solo-lector').text()).toBe('No puede:')
+    expect(w.find('[data-rol="admin"] [data-permiso="content.page.read"] .solo-lector').text()).toBe('Puede:')
+  })
+
+  it('marca solo lo sensible y explica la marca una vez, arriba', async () => {
+    const w = await montar()
+    const super_ = w.find('[data-rol="superadmin"]')
+
+    expect(super_.find('[data-permiso="content.page.read"]').text()).not.toContain('Da acceso')
+    expect(super_.find('[data-permiso="identity.role.assign"]').text()).toContain('Da acceso')
+    expect(w.find('[data-leyenda]').text()).toContain('dar o quitar acceso a otras personas')
+  })
+
+  it('sin nada sensible no hay leyenda que explicar', async () => {
+    const w = await montar(pagina([{ key: 'admin', name: 'Administracion', permissions: [leer] }]))
+    expect(w.find('[data-leyenda]').exists()).toBe(false)
   })
 
   it('sin roles dice que la migracion no corrio y deja volver a cargar', async () => {

@@ -41,10 +41,13 @@ func New(pool *pgxpool.Pool, medios Medios) (*Module, error) {
 
 func (m *Module) Name() string { return "settings" }
 
+// area agrupa los permisos de este modulo en la vista de roles.
+const area = "Configuracion"
+
 func (m *Module) Permissions() []rbac.Permission {
 	return []rbac.Permission{
-		{Key: "settings.read", Desc: "Ver la configuracion del sitio, incluidas las claves privadas"},
-		{Key: "settings.write", Desc: "Cambiar la configuracion del sitio"},
+		{Key: "settings.read", Desc: "Ver la configuracion del sitio, incluidas las claves privadas", Area: area},
+		{Key: "settings.write", Desc: "Cambiar la configuracion del sitio", Area: area},
 	}
 }
 

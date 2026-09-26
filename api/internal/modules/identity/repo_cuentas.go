@@ -155,7 +155,8 @@ func (r *Repo) catalogoDeRoles(ctx context.Context, p paging.Params) ([]RolConPe
 		select ro.key, ro.name,
 		       coalesce(
 		           jsonb_agg(jsonb_build_object(
-		               'key', pe.key, 'desc', pe.description, 'sensitive', pe.sensitive)
+		               'key', pe.key, 'desc', pe.description, 'area', pe.area,
+		               'sensitive', pe.sensitive)
 		               order by pe.key)
 		           filter (where pe.key is not null),
 		           '[]') as permisos
@@ -181,7 +182,7 @@ func (r *Repo) catalogoDeRoles(ctx context.Context, p paging.Params) ([]RolConPe
 		}
 		rol.Permisos = make([]rbac.Permission, len(permisos))
 		for i, pe := range permisos {
-			rol.Permisos[i] = rbac.Permission{Key: pe.Key, Desc: pe.Desc, Sensitive: pe.Sensitive}
+			rol.Permisos[i] = rbac.Permission{Key: pe.Key, Desc: pe.Desc, Area: pe.Area, Sensitive: pe.Sensitive}
 		}
 		return rol, nil
 	})
@@ -194,5 +195,6 @@ func (r *Repo) catalogoDeRoles(ctx context.Context, p paging.Params) ([]RolConPe
 type permisoGuardado struct {
 	Key       string `json:"key"`
 	Desc      string `json:"desc"`
+	Area      string `json:"area"`
 	Sensitive bool   `json:"sensitive"`
 }

@@ -25,10 +25,15 @@ func New() *Module { return &Module{} }
 
 func (m *Module) Name() string { return "plantilla" }
 
+// area agrupa los permisos de este modulo en la vista de roles. Nace con el
+// nombre del modulo; cambiala por como la llama quien usa el dashboard
+// ("Pedidos", no "pedidos").
+const area = "plantilla"
+
 func (m *Module) Permissions() []rbac.Permission {
 	return []rbac.Permission{
-		{Key: "plantilla.read", Desc: "Ver las cosas de este modulo"},
-		{Key: "plantilla.write", Desc: "Crear y editar las cosas de este modulo"},
+		{Key: "plantilla.read", Desc: "Ver las cosas de este modulo", Area: area},
+		{Key: "plantilla.write", Desc: "Crear y editar las cosas de este modulo", Area: area},
 	}
 }
 

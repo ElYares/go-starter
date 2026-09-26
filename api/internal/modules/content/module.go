@@ -42,14 +42,17 @@ func New(pool *pgxpool.Pool) (*Module, error) {
 
 func (m *Module) Name() string { return "content" }
 
+// area agrupa los permisos de este modulo en la vista de roles.
+const area = "Paginas"
+
 // Guardar y publicar son permisos distintos a proposito: quien edita puede no
 // poder cambiar lo que ve el publico. Ninguno es sensible: operan el sitio, no
 // reparten poder.
 func (m *Module) Permissions() []rbac.Permission {
 	return []rbac.Permission{
-		{Key: "content.page.read", Desc: "Ver las paginas de la landing y sus versiones"},
-		{Key: "content.page.write", Desc: "Crear, guardar y borrar paginas de la landing"},
-		{Key: "content.page.publish", Desc: "Publicar una version de una pagina"},
+		{Key: "content.page.read", Desc: "Ver las paginas de la landing y sus versiones", Area: area},
+		{Key: "content.page.write", Desc: "Crear, guardar y borrar paginas de la landing", Area: area},
+		{Key: "content.page.publish", Desc: "Publicar una version de una pagina", Area: area},
 	}
 }
 
