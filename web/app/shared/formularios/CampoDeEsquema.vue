@@ -9,11 +9,11 @@
 // `ruta` es la misma con la que el api nombra el campo en un 400
 // (`blocks[2].props.items[0].title`), asi que el error llega solo al campo que
 // lo tiene.
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { BaseButton, BaseField, BaseInput, BaseTextarea } from '~/shared/ui'
 import type { Schemas } from '~/shared/api/generated'
 import CampoDeMedio from './CampoDeMedio.vue'
-import { FORMATO_MEDIO, mover, valorInicial, type Esquema } from './esquema'
+import { esColor, FORMATO_COLOR, FORMATO_MEDIO, mover, valorInicial, type Esquema } from './esquema'
 
 defineOptions({ name: 'CampoDeEsquema' })
 
@@ -52,6 +52,18 @@ const texto = computed({
     valor.value = !props.requerido && v === '' ? undefined : v
   },
 })
+
+// La muestra enseña el ultimo color valido: mientras se escribe "#2f6d" no hay
+// color que pintar, y un <input type="color"> con un valor invalido se pone
+// negro, que parece un color elegido. El hex escrito manda; la muestra lo sigue.
+const ultimoColor = ref('#000000')
+watch(
+  texto,
+  (v) => {
+    if (esColor(v)) ultimoColor.value = v
+  },
+  { immediate: true },
+)
 
 const objeto = computed(() =>
   valor.value && typeof valor.value === 'object' && !Array.isArray(valor.value)
@@ -104,6 +116,39 @@ const etiquetaDeElemento = (i: number) => `${props.esquema.items?.title ?? 'Elem
     :deshabilitado="deshabilitado"
     :subir="subirMedio"
   />
+
+  <BaseField
+    v-else-if="esquema.type === 'string' && esquema.format === FORMATO_COLOR"
+    :label="etiqueta"
+    :hint="esquema.description"
+    :error="error"
+    :required="requerido"
+  >
+    <template #default="{ id, describedBy, invalid }">
+      <div class="color">
+        <!-- La paleta del sistema, sobre la muestra. El nombre accesible lo
+             lleva aparte: la etiqueta del campo es del hex, que es lo que se
+             guarda y lo que marca un 400. -->
+        <input
+          type="color"
+          class="muestra"
+          :value="ultimoColor"
+          :aria-label="`${etiqueta}: elegir en la paleta`"
+          :disabled="deshabilitado"
+          @input="texto = ($event.target as HTMLInputElement).value"
+        />
+        <BaseInput
+          :id="id"
+          v-model="texto"
+          :described-by="describedBy"
+          :invalid="invalid"
+          :disabled="deshabilitado"
+          :data-campo="ruta"
+          placeholder="#rrggbb"
+        />
+      </div>
+    </template>
+  </BaseField>
 
   <BaseField
     v-else-if="esquema.type === 'string'"
@@ -261,6 +306,41 @@ const etiquetaDeElemento = (i: number) => `${props.esquema.items?.title ?? 'Elem
 </template>
 
 <style scoped>
+.color {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+.muestra {
+  flex: none;
+  width: 2.75rem;
+  min-height: 2.5rem;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  cursor: pointer;
+}
+.muestra:focus-visible {
+  outline: var(--focus-ring) solid var(--color-accent-strong);
+  outline-offset: var(--focus-ring);
+}
+.muestra:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.muestra::-webkit-color-swatch-wrapper {
+  padding: var(--space-1);
+}
+.muestra::-webkit-color-swatch {
+  border: none;
+  border-radius: var(--radius-sm);
+}
+.muestra::-moz-color-swatch {
+  border: none;
+  border-radius: var(--radius-sm);
+}
+
 .campos {
   display: flex;
   flex-direction: column;
