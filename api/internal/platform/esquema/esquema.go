@@ -34,6 +34,30 @@ type Formato struct {
 	Validar func(string) error
 }
 
+// FormatoColor es un color hexadecimal de seis cifras, `#2f6df6`: lo que
+// entiende un `<input type="color">`. Es un formato y no un `pattern` para que
+// el formulario del dashboard sepa que pintar una muestra y un selector; un
+// `pattern` solo dice que letras caben. El modulo que lo quiera lo pasa a
+// Cargar, como cualquier otro formato propio.
+var FormatoColor = Formato{Nombre: "color", Validar: func(s string) error {
+	if !esColorHex(s) {
+		return fmt.Errorf("%q no es un color #rrggbb", s)
+	}
+	return nil
+}}
+
+func esColorHex(s string) bool {
+	if len(s) != 7 || s[0] != '#' {
+		return false
+	}
+	for _, c := range s[1:] {
+		if !strings.ContainsRune("0123456789abcdefABCDEF", c) {
+			return false
+		}
+	}
+	return true
+}
+
 // Cargar compila cada archivo de fsys que casa con patron, y lo guarda por su
 // nombre sin `.json`. Un esquema mal escrito es un error de programacion, no de
 // la peticion: tiene que impedir arrancar, no aparecer como un 500 la primera

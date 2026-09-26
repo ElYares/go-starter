@@ -316,6 +316,9 @@ colores, menú, pie.
 - **`format: media-id`** marca un campo que guarda el id de una imagen. El
   esquema exige que sea un uuid; que exista lo pregunta el service a `media` por
   su puerto (`settings/ports.go`), y solo si el resto del valor ya es válido
+- **`format: color`** es un `#rrggbb` (`esquema.FormatoColor`, en la
+  plataforma). Es un formato y no un `pattern` para que el dashboard sepa que
+  va una paleta y una muestra; un `pattern` solo dice qué letras caben
 - **Un enlace es una ruta del sitio o `https://`**: `^(/([^/]|$)|https://)`.
   `//otro.com` empieza por `/` y lleva a otro sitio
 - **Un `PUT` sin `isPublic` conserva la visibilidad** (`coalesce` en el
