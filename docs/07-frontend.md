@@ -63,6 +63,7 @@ shared/ui/
   BaseButton.vue     BaseInput.vue     BaseSelect.vue
   BaseDialog.vue     BaseTable.vue     BaseToast.vue
   BaseField.vue      BaseBadge.vue     BaseEmptyState.vue
+  BaseDrawer.vue     BaseTextarea.vue
   index.ts           ← el único punto de entrada; las vistas importan de aquí
 ```
 
