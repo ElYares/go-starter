@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '~/shared/api/errors'
-import { erroresPorCampo, mover, resolverReferencias, type Esquema } from './esquema'
+import { erroresPorCampo, esColor, mover, resolverReferencias, type Esquema } from './esquema'
+
+describe('esColor', () => {
+  // La misma regla que platform/esquema.FormatoColor: lo que entiende <input type="color">.
+  it('acepta #rrggbb en mayusculas o minusculas, y nada mas', () => {
+    for (const bueno of ['#2f6df6', '#2F6DF6']) expect(esColor(bueno), bueno).toBe(true)
+    for (const malo of ['azul', '#fff', '#2f6df6ff', '2f6df6', 'x2f6df6', '#2f6dfg', '', 7, undefined])
+      expect(esColor(malo), String(malo)).toBe(false)
+  })
+})
 
 describe('mover', () => {
   it('intercambia con el vecino y no muta la lista original', () => {

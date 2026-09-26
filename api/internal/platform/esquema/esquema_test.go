@@ -133,3 +133,20 @@ func TestUnEsquemaMalEscritoNoCarga(t *testing.T) {
 		})
 	}
 }
+
+// Lo que acepta es exactamente lo que acepta un <input type="color">: seis
+// cifras, mayusculas o minusculas. Ni la forma corta ni la de ocho con alfa.
+func TestFormatoColorAceptaSoloRrggbb(t *testing.T) {
+	e := cargar(t, map[string]string{"t.json": `{"type":"string","format":"color"}`}, FormatoColor)["t"]
+
+	for _, bueno := range []string{"#2f6df6", "#2F6DF6", "#000000"} {
+		if issues := e.Validar(bueno, "value"); issues != nil {
+			t.Errorf("%q dio %v", bueno, campos(issues))
+		}
+	}
+	for _, malo := range []string{"azul", "#2f6df", "#2f6df6ff", "2f6df6", "x2f6df6", "#fff", "#2f6dfg", "", "#2f6df６"} {
+		if got := campos(e.Validar(malo, "value")); !slices.Equal(got, []string{"value:format"}) {
+			t.Errorf("%q = %v", malo, got)
+		}
+	}
+}

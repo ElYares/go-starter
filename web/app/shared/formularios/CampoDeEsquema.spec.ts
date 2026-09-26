@@ -122,4 +122,51 @@ describe('CampoDeEsquema', () => {
     expect(w.find('[data-campo="p.items[0].title"]').attributes('disabled')).toBeDefined()
     expect(w.findAll('button').some((b) => b.text().startsWith('Agregar'))).toBe(false)
   })
+
+  // format: color (platform/esquema.FormatoColor). El esquema va a mano: el real
+  // es de settings, y shared/ no mira modulos. EditorDeSetting prueba el real.
+  describe('un color', () => {
+    const tema = { type: 'object', required: ['accent'], properties: { accent: { title: 'Acento', type: 'string', format: 'color' } } }
+
+    function montarColor(valor: unknown, deshabilitado = false) {
+      return mount(CampoDeEsquema, {
+        props: { esquema: tema, etiqueta: 'Tema', ruta: 'value', errores: {}, requerido: true, raiz: true, deshabilitado, modelValue: valor },
+      })
+    }
+    const paleta = (w: ReturnType<typeof montarColor>) => w.find<HTMLInputElement>('input[type="color"]')
+
+    it('pinta la muestra con el color guardado, junto al hex', () => {
+      const w = montarColor({ accent: '#2f6df6' })
+      expect(paleta(w).element.value).toBe('#2f6df6')
+      expect((campo(w, 'value.accent').element as HTMLInputElement).value).toBe('#2f6df6')
+      expect(paleta(w).attributes('aria-label')).toContain('Acento')
+    })
+
+    it('elegir en la paleta cambia el valor', async () => {
+      const w = montarColor({ accent: '#2f6df6' })
+      await paleta(w).setValue('#e0531f')
+      expect(ultimo(w)).toEqual({ accent: '#e0531f' })
+    })
+
+    it('escribir el hex mueve la muestra', async () => {
+      const w = montarColor({ accent: '#2f6df6' })
+      await campo(w, 'value.accent').setValue('#00aa55')
+      expect(ultimo(w)).toEqual({ accent: '#00aa55' })
+      expect(paleta(w).element.value).toBe('#00aa55')
+    })
+
+    // A medio escribir no hay color: la muestra se queda en el ultimo valido en
+    // vez de ponerse negra, que pareceria un color elegido.
+    it('un hex a medio escribir deja la muestra en el ultimo color valido', async () => {
+      const w = montarColor({ accent: '#2f6df6' })
+      await campo(w, 'value.accent').setValue('#00a')
+      expect(ultimo(w)).toEqual({ accent: '#00a' })
+      expect(paleta(w).element.value).toBe('#2f6df6')
+    })
+
+    it('deshabilitado no deja elegir', () => {
+      expect(paleta(montarColor({ accent: '#2f6df6' }, true)).attributes('disabled')).toBeDefined()
+    })
+  })
 })
+

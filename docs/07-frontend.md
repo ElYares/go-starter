@@ -177,6 +177,7 @@ los esquemas del starter:
 | `object` opcional | "Agregar …" / "Quitar …" |
 | `array` | un grupo por elemento, con subir, bajar y quitar; respeta `minItems` y `maxItems` |
 | `string` con `format: media-id` | un campo de imagen: vista previa, subir y quitar (`CampoDeMedio.vue`) |
+| `string` con `format: color` | una muestra que abre la paleta del sistema, junto al hex editable |
 | `$ref` a `#/$defs/…` | lo que nombra; se resuelve al cargar (`resolverReferencias`) |
 | otra cosa | su JSON, sin editar, y se conserva al guardar |
 

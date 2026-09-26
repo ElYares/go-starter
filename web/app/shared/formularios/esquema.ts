@@ -19,7 +19,8 @@ export interface Esquema {
   pattern?: string
   /**
    * `media-id` es el id de una imagen subida: se edita con un campo de subida,
-   * no escribiendo el uuid. Los demas formatos se ignoran.
+   * no escribiendo el uuid. `color` es un `#rrggbb`: se edita con una muestra y
+   * la paleta del sistema. Los demas formatos se ignoran.
    */
   format?: string
   $ref?: string
@@ -28,6 +29,12 @@ export interface Esquema {
 
 /** El `format` de un campo que guarda el id de una imagen (settings/esquemas). */
 export const FORMATO_MEDIO = 'media-id'
+
+/** El `format` de un color `#rrggbb` (platform/esquema.FormatoColor). */
+export const FORMATO_COLOR = 'color'
+
+/** Si es un color que entiende `<input type="color">`: la misma regla que el api. */
+export const esColor = (v: unknown): v is string => typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v)
 
 /** El tope de una imagen, el mismo que aplica el api (media.MaxBytes). */
 export const MAX_BYTES_MEDIO = 5 * 1024 * 1024

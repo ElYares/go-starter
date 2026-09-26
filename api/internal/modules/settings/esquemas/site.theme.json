@@ -12,7 +12,7 @@
       "title": "Color de acento",
       "description": "Un color hexadecimal, como #2f6df6",
       "type": "string",
-      "pattern": "^#[0-9a-fA-F]{6}$"
+      "format": "color"
     }
   }
 }

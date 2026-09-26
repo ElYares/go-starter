@@ -234,3 +234,23 @@ describe('EditorDeSetting', () => {
     expect(boton(w, 'Reintentar')).toBeDefined()
   })
 })
+
+// El esquema real de site.theme dice `format: color`: el acento se elige en la
+// paleta, y lo elegido es lo que se guarda.
+describe('el tema se edita con la paleta', () => {
+  it('muestra el color guardado y guarda el elegido', async () => {
+    const { w, guardar } = montar('site.theme', { accent: '#2f6df6' })
+    await flushPromises()
+
+    const paleta = w.find<HTMLInputElement>('input[type="color"]')
+    expect(paleta.exists()).toBe(true)
+    expect(paleta.element.value).toBe('#2f6df6')
+
+    await paleta.setValue('#e0531f')
+    await boton(w, 'Guardar')!.trigger('click')
+    await flushPromises()
+
+    expect(guardar.mock.calls[0]?.[1]).toEqual({ accent: '#e0531f' })
+  })
+})
+

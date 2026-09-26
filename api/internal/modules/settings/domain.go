@@ -67,7 +67,7 @@ var medioID = esquema.Formato{Nombre: formatoMedio, Validar: func(s string) erro
 }}
 
 func cargarEsquemas() (map[string]*esquema.Esquema, error) {
-	es, err := esquema.Cargar(esquemasFS, "esquemas/*.json", medioID)
+	es, err := esquema.Cargar(esquemasFS, "esquemas/*.json", medioID, esquema.FormatoColor)
 	if err != nil {
 		return nil, fmt.Errorf("settings: %w", err)
 	}
