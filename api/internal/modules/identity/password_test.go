@@ -27,7 +27,13 @@ func TestElHashSaleEnFormatoPHCConSusParametros(t *testing.T) {
 
 // La contrasena no puede aparecer dentro del hash, ni entera ni por trozos.
 // Parece obvio hasta que alguien "optimiza" guardando el largo o un prefijo.
+//
+// Solo cuentan los trozos de 6 letras o mas: el hash es base64 aleatorio, y
+// una palabra corta como "de" sale ahi por azar en ~1.6% de las corridas. Una
+// de 6 letras, en ~1 de cada mil millones.
 func TestElHashNoContieneLaContrasena(t *testing.T) {
+	const largoMinimoDelTrozo = 6
+
 	h, err := Hash(contrasenaDePrueba)
 	if err != nil {
 		t.Fatalf("Hash: %v", err)
@@ -36,6 +42,9 @@ func TestElHashNoContieneLaContrasena(t *testing.T) {
 		t.Fatalf("el hash contiene la contrasena en claro: %q", h)
 	}
 	for _, palabra := range strings.Fields(contrasenaDePrueba) {
+		if len(palabra) < largoMinimoDelTrozo {
+			continue
+		}
 		if strings.Contains(h, palabra) {
 			t.Errorf("el hash contiene el trozo %q de la contrasena: %q", palabra, h)
 		}
