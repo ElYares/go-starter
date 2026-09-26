@@ -23,15 +23,21 @@ const visibles = computed(() => seccionesVisibles(props.perfil.permissions, prop
 
 <template>
   <div class="shell">
+    <!-- Sin envoltorio para la sesion: cada pieza es una celda del grid, y en
+         angosto "Cerrar sesion" sube junto a la marca. -->
     <header class="barra">
       <span class="marca">go-starter</span>
-      <div class="sesion">
-        <span class="quien">Sesion de {{ perfil.displayName }}</span>
-        <RouterLink to="/admin/contrasena" class="mi-contrasena">Mi contrasena</RouterLink>
-        <BaseButton variant="secondary" size="sm" :loading="saliendo" @click="$emit('salir')">
-          Cerrar sesion
-        </BaseButton>
-      </div>
+      <span class="quien" :title="perfil.displayName">Sesion de {{ perfil.displayName }}</span>
+      <RouterLink to="/admin/contrasena" class="mi-contrasena">Mi contrasena</RouterLink>
+      <BaseButton
+        class="salir"
+        variant="secondary"
+        size="sm"
+        :loading="saliendo"
+        @click="$emit('salir')"
+      >
+        Cerrar sesion
+      </BaseButton>
     </header>
 
     <nav class="nav" aria-label="Secciones del dashboard">
@@ -58,30 +64,57 @@ const visibles = computed(() => seccionesVisibles(props.perfil.permissions, prop
 .shell {
   min-height: 100vh;
 }
+/* Una fila en ancho. El nombre es lo unico que cede: un displayName largo se
+   recorta con "..." en vez de partir la marca o los botones en dos lineas. */
 .barra {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-areas: 'marca quien contrasena salir';
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
 }
 .marca {
+  grid-area: marca;
   font-weight: 700;
-}
-.sesion {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-.mi-contrasena {
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
+  white-space: nowrap;
 }
 .quien {
+  grid-area: quien;
+  justify-self: end;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--color-text-muted);
   font-size: var(--text-sm);
+}
+.mi-contrasena {
+  grid-area: contrasena;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.salir {
+  grid-area: salir;
+  white-space: nowrap;
+}
+
+/* En angosto no cabe en una fila: arriba la marca y "Cerrar sesion", abajo
+   quien tiene la sesion y "Mi contrasena". */
+@media (max-width: 48rem) {
+  .barra {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'marca salir'
+      'quien contrasena';
+  }
+  .quien {
+    justify-self: start;
+  }
 }
 .nav {
   display: flex;
