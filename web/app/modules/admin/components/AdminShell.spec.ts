@@ -9,12 +9,13 @@ function perfil(permissions: string[]): Perfil {
   return { id: 'u', email: 'a@b.c', displayName: 'Ana', roles: [], permissions, mustChangePassword: false }
 }
 
-function montar(permissions: string[], opciones: { attachTo?: HTMLElement } = {}) {
+function montar(permissions: string[], opciones: { attachTo?: HTMLElement; anchoCompleto?: boolean } = {}) {
+  const { anchoCompleto, ...resto } = opciones
   return mount(AdminShell, {
-    props: { perfil: perfil(permissions) },
+    props: { perfil: perfil(permissions), anchoCompleto },
     slots: { default: '<p class="dentro">contenido</p>' },
     global: { stubs: { RouterLink: RouterLinkStub } },
-    ...opciones,
+    ...resto,
   })
 }
 
@@ -37,6 +38,11 @@ describe('AdminShell', () => {
     const w = montar([])
     expect(w.text()).toContain('Sesion de Ana')
     expect(w.find('.dentro').exists()).toBe(true)
+  })
+
+  it('el contenido va acotado, salvo en una pagina que pide toda la ventana', () => {
+    expect(montar([]).find('main').classes()).not.toContain('completo')
+    expect(montar([], { anchoCompleto: true }).find('main').classes()).toContain('completo')
   })
 
   it('avisa al pulsar cerrar sesion', async () => {

@@ -12,6 +12,7 @@ import { useApi } from '~/shared/api/useApi'
 // llegar aqui sin el. El v-if cubre el instante de "Cerrar sesion", en que el
 // perfil ya es null y la navegacion al login todavia no termino.
 const { perfil } = useSesion()
+const route = useRoute()
 const saliendo = ref(false)
 
 // El perfil se vacia ANTES de navegar: si quedara, el guard dejaria volver a
@@ -25,7 +26,14 @@ async function salir() {
 </script>
 
 <template>
-  <AdminShell v-if="perfil" :perfil="perfil" :saliendo="saliendo" @salir="salir">
+  <!-- Una pagina pide toda la ventana con definePageMeta({ anchoCompleto: true }). -->
+  <AdminShell
+    v-if="perfil"
+    :perfil="perfil"
+    :saliendo="saliendo"
+    :ancho-completo="route.meta.anchoCompleto === true"
+    @salir="salir"
+  >
     <NuxtPage />
   </AdminShell>
 </template>

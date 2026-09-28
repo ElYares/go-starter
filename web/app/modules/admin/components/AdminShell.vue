@@ -16,8 +16,10 @@ const props = withDefaults(
     perfil: Perfil
     saliendo?: boolean
     secciones?: Seccion[]
+    /** El contenido usa toda la ventana, para las pantallas que son una tabla ancha. */
+    anchoCompleto?: boolean
   }>(),
-  { saliendo: false, secciones: () => SECCIONES },
+  { saliendo: false, secciones: () => SECCIONES, anchoCompleto: false },
 )
 
 defineEmits<{ salir: [] }>()
@@ -153,7 +155,7 @@ onBeforeUnmount(() => consulta?.removeEventListener('change', alCambiarElAncho))
         </div>
       </header>
 
-      <main class="contenido">
+      <main class="contenido" :class="{ completo: anchoCompleto }">
         <slot />
       </main>
     </div>
@@ -284,6 +286,10 @@ onBeforeUnmount(() => consulta?.removeEventListener('change', alCambiarElAncho))
   max-width: 56rem;
   margin: 0 auto;
   padding: var(--space-6) var(--space-4);
+}
+/* Sin tope: una tabla de doce columnas en 56rem se lee a pedazos. */
+.contenido.completo {
+  max-width: none;
 }
 
 /* La sesion, al pie del cajon del angosto. */

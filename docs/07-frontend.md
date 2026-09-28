@@ -46,6 +46,13 @@ web/app/
 real vive en su módulo, lo que permite mover una pantalla entre rutas sin
 tocarla, y borrar un módulo entero de un fork sin dejar restos.
 
+Lo único que una página del dashboard dice además de su vista va en
+`definePageMeta`. Una es el ancho: el shell (`AdminShell`) acota el contenido a
+56rem, que sirve para formularios y listas pero parte en pedazos una tabla
+ancha. La página que la necesite pide toda la ventana con
+`definePageMeta({ anchoCompleto: true })`; `AdminView` lo lee de la ruta y el
+shell quita el tope. Las demás no cambian.
+
 Un componente vive en `shared/ui/` **cuando lo usan dos módulos**. Antes de eso
 vive en el módulo que lo usa. Lo contrario —todo a `shared/` por si acaso—
 produce una carpeta de doscientos componentes donde nadie sabe cuál está vivo.
