@@ -27,16 +27,26 @@ useSeoMeta(metaDePagina(pagina.value, useRequestURL().href))
 
 <template>
   <MarcoDelSitio>
-    <main class="landing">
+    <main id="contenido" class="landing">
       <RenderDeBloques :bloques="pagina.blocks" />
+      <section v-if="!pagina.blocks.length" class="vacia">
+        <h1>Esta página aún no tiene contenido</h1>
+        <p>Vuelve en unos días, o ve al inicio.</p>
+        <a href="/">Ir al inicio</a>
+      </section>
     </main>
   </MarcoDelSitio>
 </template>
 
 <style scoped>
+/* Sin ancho ni relleno: cada bloque es una banda que llega al borde. */
 .landing {
-  max-width: 60rem;
-  margin: 0 auto;
-  padding: var(--space-4);
+  display: block;
+}
+.vacia {
+  max-width: var(--measure);
+  margin-inline: auto;
+  padding: var(--space-24) var(--space-4);
+  text-align: center;
 }
 </style>

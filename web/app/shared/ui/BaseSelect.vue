@@ -87,9 +87,9 @@ const marcador = computed(() => props.placeholder ?? 'Elegir…')
   gap: var(--space-2);
   width: 100%;
   padding: var(--space-2) var(--space-3);
-  background: var(--color-surface);
+  background: var(--color-bg);
   color: var(--color-text);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-sm);
   font: inherit;
   font-size: var(--text-base);
@@ -156,7 +156,7 @@ const marcador = computed(() => props.placeholder ?? 'Elegir…')
    Usar :hover dejaria la navegacion por teclado sin ninguna senal visible. */
 .opcion[data-highlighted] {
   background: var(--color-accent-strong);
-  color: var(--color-on-accent);
+  color: var(--color-on-accent-strong);
   outline: none;
 }
 

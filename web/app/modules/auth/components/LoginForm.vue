@@ -132,7 +132,7 @@ async function enviar() {
       </p>
     </div>
 
-    <BaseButton type="submit" :loading="enviando">Entrar</BaseButton>
+    <BaseButton variant="highlight" type="submit" :loading="enviando">Entrar</BaseButton>
   </form>
 </template>
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { HeroContenido } from './tipos'
 import { esHrefSeguro } from './href'
+import BandaDeSeccion from './BandaDeSeccion.vue'
 
 // La portada de una pagina. El enlace es un <a> y no un NuxtLink a proposito:
 // la landing tiene que funcionar sin JavaScript, y un bloque que no importa
@@ -12,41 +13,72 @@ defineProps<{ contenido: HeroContenido }>()
 </script>
 
 <template>
-  <section class="hero">
-    <h1>{{ contenido.title }}</h1>
-    <p v-if="contenido.subtitle" class="bajada">{{ contenido.subtitle }}</p>
-    <a v-if="contenido.cta && esHrefSeguro(contenido.cta.href)" class="cta" :href="contenido.cta.href">{{ contenido.cta.label }}</a>
-  </section>
+  <BandaDeSeccion tono="marca" amplia>
+    <div class="hero">
+      <h1>{{ contenido.title }}</h1>
+      <p v-if="contenido.subtitle" class="bajada">{{ contenido.subtitle }}</p>
+      <a v-if="contenido.cta && esHrefSeguro(contenido.cta.href)" class="cta" :href="contenido.cta.href">{{ contenido.cta.label }}</a>
+    </div>
+  </BandaDeSeccion>
 </template>
 
 <style scoped>
 .hero {
-  padding: var(--space-8) 0;
+  text-align: center;
 }
 h1 {
-  margin: 0 0 var(--space-4);
-  font-size: var(--text-display);
+  margin: 0 auto var(--space-4);
+  max-width: 20ch;
+  font-size: var(--text-hero);
   line-height: 1.1;
+  overflow-wrap: anywhere;
 }
 .bajada {
-  margin: 0 0 var(--space-6);
+  margin: 0 auto var(--space-8);
+  max-width: 40rem;
   font-size: var(--text-lg);
-  color: var(--color-text-muted);
+  color: var(--color-on-brand-muted);
 }
 .cta {
-  display: inline-block;
-  padding: var(--space-3) var(--space-6);
-  border-radius: var(--radius-md);
-  background: var(--color-accent);
-  color: var(--color-on-accent);
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: var(--space-3) var(--space-8);
+  border-radius: var(--radius-full);
+  background: var(--color-highlight);
+  color: var(--color-on-highlight);
+  font-weight: 700;
   text-decoration: none;
+  box-shadow: var(--shadow-cta);
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    background var(--duration-fast);
 }
 .cta:hover {
-  background: var(--color-accent-strong);
+  background: var(--color-highlight-strong);
+  transform: translateY(-1px);
 }
 .cta:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
+  outline: var(--focus-ring) solid var(--color-focus-on-brand);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  h1,
+  .bajada,
+  .cta {
+    animation: subir var(--duration-base) var(--ease-out) both;
+  }
+  .bajada {
+    animation-delay: 60ms;
+  }
+  .cta {
+    animation-delay: 120ms;
+  }
+}
+@keyframes subir {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-4));
+  }
 }
 </style>

@@ -64,7 +64,7 @@ function crear() {
         <BaseBadge variant="accent">fase 1</BaseBadge>
         <h1>Dashboard</h1>
       </div>
-      <BaseButton @click="dialogoAbierto = true">Nueva pagina</BaseButton>
+      <BaseButton variant="highlight" @click="dialogoAbierto = true">Nueva pagina</BaseButton>
     </header>
 
     <p class="hint">

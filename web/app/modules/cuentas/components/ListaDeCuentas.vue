@@ -94,7 +94,7 @@ async function onCrear() {
   <section class="cuentas" :aria-busy="estado === 'cargando' || undefined">
     <header class="cabecera">
       <h1>Usuarios</h1>
-      <BaseButton v-if="puedeEscribir && estado === 'listo'" @click="abrirAlta">Nueva cuenta</BaseButton>
+      <BaseButton variant="highlight" v-if="puedeEscribir && estado === 'listo'" @click="abrirAlta">Nueva cuenta</BaseButton>
     </header>
 
     <div v-if="estado === 'cargando'" class="esqueleto" data-estado="cargando" aria-label="Cargando las cuentas">

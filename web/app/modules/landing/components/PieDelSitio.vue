@@ -8,6 +8,7 @@ defineProps<{ sitio: Sitio }>()
 
 <template>
   <footer v-if="sitio.pie.texto || sitio.pie.enlaces.length" class="pie">
+    <div class="interior">
     <p v-if="sitio.pie.texto" class="texto">{{ sitio.pie.texto }}</p>
     <nav v-if="sitio.pie.enlaces.length" aria-label="Pie de pagina">
       <ul class="enlaces">
@@ -16,22 +17,26 @@ defineProps<{ sitio: Sitio }>()
         </li>
       </ul>
     </nav>
+    </div>
   </footer>
 </template>
 
 <style scoped>
 .pie {
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.interior {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3) var(--space-6);
   align-items: center;
   justify-content: space-between;
-  max-width: 60rem;
-  margin: var(--space-8) auto 0;
-  padding: var(--space-4);
-  border-top: 1px solid var(--color-border);
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
+  max-width: var(--container-w);
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-4);
 }
 .texto {
   margin: 0;

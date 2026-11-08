@@ -185,7 +185,7 @@ onBeforeUnmount(() => consulta?.removeEventListener('change', alCambiarElAncho))
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--color-border);
-  background: var(--color-surface);
+  background: var(--color-surface-sidebar);
 }
 .lateral .marca {
   display: flex;
@@ -196,6 +196,7 @@ onBeforeUnmount(() => consulta?.removeEventListener('change', alCambiarElAncho))
 }
 
 .marca {
+  color: var(--color-accent-strong);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -221,8 +222,8 @@ onBeforeUnmount(() => consulta?.removeEventListener('change', alCambiarElAncho))
   outline-offset: var(--focus-ring);
 }
 .actual {
-  background: var(--color-surface-hover);
-  color: var(--color-accent-strong);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
   font-weight: 600;
 }
 
@@ -234,6 +235,7 @@ onBeforeUnmount(() => consulta?.removeEventListener('change', alCambiarElAncho))
   padding: 0 var(--space-4);
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
+  box-shadow: inset 0 -2px 0 var(--color-accent);
 }
 .barra .hamburguesa,
 .marca-arriba {

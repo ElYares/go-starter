@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { TextoContenido } from './tipos'
+import BandaDeSeccion from './BandaDeSeccion.vue'
 
 const props = defineProps<{ contenido: TextoContenido }>()
 
@@ -17,21 +18,27 @@ const parrafos = computed(() =>
 </script>
 
 <template>
-  <section class="texto">
-    <h2 v-if="contenido.title">{{ contenido.title }}</h2>
-    <p v-for="(parrafo, i) in parrafos" :key="i">{{ parrafo }}</p>
-  </section>
+  <BandaDeSeccion tono="suave">
+    <div class="texto">
+      <h2 v-if="contenido.title">{{ contenido.title }}</h2>
+      <p v-for="(parrafo, i) in parrafos" :key="i">{{ parrafo }}</p>
+    </div>
+  </BandaDeSeccion>
 </template>
 
 <style scoped>
 .texto {
-  padding: var(--space-6) 0;
+  max-width: var(--measure);
+  margin-inline: auto;
+  line-height: 1.7;
 }
 h2 {
   margin: 0 0 var(--space-4);
-  font-size: var(--text-lg);
+  font-size: var(--text-xl);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 p {
-  margin: 0 0 var(--space-3);
+  margin: 0 0 var(--space-4);
 }
 </style>

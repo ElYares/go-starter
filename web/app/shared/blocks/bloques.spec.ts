@@ -83,8 +83,10 @@ describe('RenderDeBloques', () => {
       },
     })
 
+    // Cada bloque es una banda; lo que dice cual es, es su contenido interior.
     const secciones = pagina.findAll('section')
-    expect(secciones.map((s) => s.classes()[0])).toEqual(['texto', 'hero'])
+    expect(secciones.map((s) => s.classes('tono-suave') ? 'texto' : 'hero')).toEqual(['texto', 'hero'])
+    expect(secciones[1]!.classes()).toContain('tono-marca')
     expect(pagina.find('h1').text()).toBe('Portada')
   })
 
