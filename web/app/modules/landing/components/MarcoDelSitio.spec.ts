@@ -39,13 +39,15 @@ describe('CabeceraDelSitio', () => {
 
   it('el menu sale dentro de un nav, en orden', () => {
     const w = mount(CabeceraDelSitio, { props: { sitio: sitio(), urlDeLogo }, global })
-    // Los del menu: el primero de la cabecera es el de la marca, fuera del nav.
-    const enlaces = w.findAllComponents(RouterLinkStub).slice(1)
+    // El menu va dos veces: a la vista en escritorio y en un <details> en movil.
+    // Los primeros enlaces son la marca y el menu de escritorio.
+    const enlaces = w.findAllComponents(RouterLinkStub).slice(1, 4)
     expect(enlaces.map((l) => [l.text(), l.props('to')])).toEqual([
       ['Inicio', '/'],
       ['Precios', '/precios'],
       ['Blog', 'https://blog.ejemplo.com'],
     ])
+    expect(w.findAll('.movil a')).toHaveLength(3)
     expect(w.find('nav').attributes('aria-label')).toBe('Principal')
   })
 

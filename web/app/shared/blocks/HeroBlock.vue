@@ -49,12 +49,36 @@ h1 {
   color: var(--color-brand);
   font-weight: 700;
   text-decoration: none;
+  box-shadow: var(--shadow-cta);
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    background var(--duration-fast);
 }
 .cta:hover {
   background: var(--color-on-brand-muted);
+  transform: translateY(-1px);
 }
 .cta:focus-visible {
   outline: var(--focus-ring) solid var(--color-focus-on-brand);
   outline-offset: 3px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  h1,
+  .bajada,
+  .cta {
+    animation: subir var(--duration-base) var(--ease-out) both;
+  }
+  .bajada {
+    animation-delay: 60ms;
+  }
+  .cta {
+    animation-delay: 120ms;
+  }
+}
+@keyframes subir {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-4));
+  }
 }
 </style>

@@ -20,8 +20,8 @@ defineProps<{ contenido: FeaturesContenido }>()
 
 <style scoped>
 h2 {
-  margin: 0 0 var(--space-8);
-  font-size: var(--text-2xl);
+  margin: 0 0 var(--space-12);
+  font-size: var(--text-section);
   line-height: 1.2;
   text-align: center;
   overflow-wrap: anywhere;
@@ -36,27 +36,53 @@ ul {
   list-style: none;
 }
 li {
+  position: relative;
   padding: var(--space-6);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+li::before {
+  content: '';
+  position: absolute;
+  inset: 0 var(--space-6) auto;
+  height: 3px;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  background: linear-gradient(90deg, var(--color-accent), var(--color-accent-strong));
+}
+@media (prefers-reduced-motion: no-preference) {
+  li {
+    transition:
+      transform var(--duration-base) var(--ease-out),
+      box-shadow var(--duration-base),
+      border-color var(--duration-base);
+  }
+  li:hover {
+    transform: translateY(calc(var(--space-1) * -1));
+  }
+}
+li:hover {
+  border-color: var(--color-accent-strong);
+  box-shadow: var(--shadow-card-hover);
 }
 .orden {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
+  width: 3rem;
+  height: 3rem;
   margin-bottom: var(--space-3);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-md);
   background: var(--color-accent);
   color: var(--color-on-accent);
-  font-size: var(--text-sm);
+  font-size: var(--text-lg);
   font-weight: 700;
 }
 h3 {
   margin: 0 0 var(--space-2);
   font-size: var(--text-lg);
+  font-weight: 650;
   overflow-wrap: anywhere;
 }
 p {
