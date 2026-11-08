@@ -41,7 +41,7 @@ defineProps<{
   background:
     radial-gradient(60rem 28rem at 85% -10%, color-mix(in srgb, var(--color-brand-glow) 45%, transparent), transparent 70%),
     radial-gradient(40rem 24rem at 5% 110%, color-mix(in srgb, var(--color-brand-glow) 25%, transparent), transparent 70%),
-    linear-gradient(180deg, var(--color-brand), var(--color-brand-deep));
+    linear-gradient(180deg, var(--color-bg), var(--color-brand-deep));
 }
 /* Un anillo concentrico, como el circulo de la imagen de acceso. Es decoracion
    pura: un pseudo-elemento, asi que nadie lo lee. */

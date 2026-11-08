@@ -45,8 +45,8 @@ h1 {
   min-height: 2.75rem;
   padding: var(--space-3) var(--space-8);
   border-radius: var(--radius-full);
-  background: var(--color-on-brand);
-  color: var(--color-brand);
+  background: var(--color-highlight);
+  color: var(--color-on-highlight);
   font-weight: 700;
   text-decoration: none;
   box-shadow: var(--shadow-cta);
@@ -55,7 +55,7 @@ h1 {
     background var(--duration-fast);
 }
 .cta:hover {
-  background: var(--color-on-brand-muted);
+  background: var(--color-highlight-strong);
   transform: translateY(-1px);
 }
 .cta:focus-visible {

@@ -66,6 +66,7 @@ const bloqueado = computed(() => props.disabled || props.loading)
 }
 .v-primary:hover:not(:disabled) {
   background: var(--color-accent-strong);
+  color: var(--color-on-accent-strong);
 }
 
 .v-secondary {
@@ -87,7 +88,7 @@ const bloqueado = computed(() => props.disabled || props.loading)
 
 .v-danger {
   background: var(--color-danger);
-  color: var(--color-on-accent);
+  color: var(--color-on-danger);
 }
 
 /* :focus-visible y no :focus: con :focus el anillo aparece tambien al hacer

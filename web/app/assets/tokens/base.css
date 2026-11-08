@@ -15,20 +15,35 @@
  * aqui, y hay una prueba que lo comprueba (shared/ui/sin-literales.spec.ts).
  */
 :root {
-  color-scheme: light dark;
+  /* La paleta es una sola y oscura: 60% midnight black (fondos y superficies),
+     30% electric blue (acento y marca), 10% sunset orange (la accion que
+     importa). Por eso no hay tema claro. */
+  color-scheme: dark;
 
-  --color-bg: #fbfbfa;
-  --color-surface: #ffffff;
+  --color-bg: #090a10;
+  --color-surface: #12141d;
   /* El realce de una fila o un boton fantasma al pasar el raton. Es un fondo,
      asi que tiene sus pares de texto medidos como cualquier otro. */
-  --color-surface-hover: #f2f3f5;
-  --color-text: #17181c;
-  --color-text-muted: #5f6470;
-  --color-border: #d9dbe1;
+  --color-surface-hover: #1b1e29;
+  --color-text: #f2f4fa;
+  --color-text-muted: #a2a8bc;
+  --color-border: #272b39;
 
-  --color-accent: #2f6df6;
-  --color-accent-strong: #1c4fd0;
+  /* Electric blue es #2f6bff (en --color-brand-glow, los halos). Como relleno
+     con texto blanco ese valor da 4.4998:1, a una milesima del minimo, asi que
+     el relleno es #2e6aff: el mismo azul a la vista, y la prueba lo mide. */
+  --color-accent: #2e6aff;
+  --color-accent-strong: #7b9dff;
   --color-on-accent: #ffffff;
+  /* El acento fuerte es claro (se lee como texto sobre negro), asi que cuando
+     rellena algo lleva texto midnight y no blanco. */
+  --color-on-accent-strong: #090a10;
+
+  /* El 10%: la accion principal de una pagina. Un relleno naranja con texto
+     midnight, no mas de uno por pantalla. */
+  --color-highlight: #ff7a1a;
+  --color-highlight-strong: #ff9447;
+  --color-on-highlight: #090a10;
 
   /* El panel de marca del login: un relleno grande y saturado que no cambia con
      el tema, porque es la imagen del proyecto y no una superficie. Por eso el
@@ -44,16 +59,17 @@
 
   /* El halo y el trazo decorativo del hero: el acento claro sobre el azul
      profundo, y un blanco tenue para los anillos. */
-  --color-brand-glow: #2f6df6;
+  --color-brand-glow: #2f6bff;
   --color-brand-line: rgb(255 255 255 / 0.14);
 
-  --color-ok: #157f4a;
-  --color-danger: #b3261e;
+  --color-ok: #4ad18b;
+  --color-danger: #ff8a80;
+  --color-on-danger: #090a10;
 
   /* El velo detras de un dialogo. Es token y no un rgba dentro del componente
      porque en oscuro no basta con el mismo negro: el fondo ya es oscuro y el
      velo tiene que ser mas denso para que se note que hay una capa encima. */
-  --color-scrim: rgb(0 0 0 / 0.45);
+  --color-scrim: rgb(0 0 0 / 0.7);
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", monospace;
@@ -93,38 +109,15 @@
      rapida de dejar el starter inusable con teclado, y asi al menos se ve. */
   --focus-ring: 2px;
 
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.06), 0 8px 24px rgb(0 0 0 / 0.06);
-  --shadow-card-hover: 0 2px 4px rgb(0 0 0 / 0.08), 0 16px 32px rgb(0 0 0 / 0.12);
+  /* Sobre negro una sombra apenas se nota: un filo claro separa la tarjeta. */
+  --shadow-card: 0 0 0 1px rgb(255 255 255 / 0.04), 0 8px 24px rgb(0 0 0 / 0.5);
+  --shadow-card-hover: 0 0 0 1px rgb(255 255 255 / 0.08), 0 16px 32px rgb(0 0 0 / 0.6);
   --shadow-cta: 0 6px 20px rgb(0 0 0 / 0.25);
 
   --duration-fast: 150ms;
   --duration-base: 240ms;
   --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
   --header-h: 4rem;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: #101114;
-    --color-surface: #191b20;
-    --color-surface-hover: #22252c;
-    --color-text: #f2f3f5;
-    --color-text-muted: #a3a8b4;
-    --color-border: #2c2f37;
-
-    --color-accent: #4d84ff;
-    --color-accent-strong: #8ab0ff;
-    --color-on-accent: #0d1220;
-
-    --color-ok: #4ad18b;
-    --color-danger: #ff8a80;
-
-    --color-scrim: rgb(0 0 0 / 0.7);
-
-    /* En oscuro una sombra negra apenas se nota: un filo claro separa la tarjeta. */
-    --shadow-card: 0 0 0 1px rgb(255 255 255 / 0.04), 0 8px 24px rgb(0 0 0 / 0.5);
-    --shadow-card-hover: 0 0 0 1px rgb(255 255 255 / 0.08), 0 16px 32px rgb(0 0 0 / 0.6);
-  }
 }
 
 * {

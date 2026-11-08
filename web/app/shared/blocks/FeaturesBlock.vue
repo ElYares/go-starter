@@ -49,7 +49,7 @@ li::before {
   inset: 0 var(--space-6) auto;
   height: 3px;
   border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-  background: linear-gradient(90deg, var(--color-accent), var(--color-accent-strong));
+  background: linear-gradient(90deg, var(--color-accent), var(--color-highlight));
 }
 @media (prefers-reduced-motion: no-preference) {
   li {

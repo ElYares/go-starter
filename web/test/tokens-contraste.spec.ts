@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 // Por que esto es una prueba y no un vistazo de una tarde:
 //
-// El par --color-accent / --color-on-accent en tema claro da 4.53:1. Tres
+// El par --color-accent / --color-on-accent daba 4.53:1 en el tema claro de antes. Tres
 // centesimas por encima del minimo. Lo primero que hace un fork es meter su
 // color de marca en ese token, y no hay ninguna senal de que lo rompio: la
 // landing se ve bien, nadie se queja, y el texto sobre el boton principal deja
@@ -33,7 +33,10 @@ const PARES: Array<[string, string]> = [
   // El acento fuerte tambien se usa como relleno (item seleccionado de un
   // select, boton en foco), y entonces necesita su par de texto igual que el
   // de marca. Es la regla "todo relleno tiene su par" aplicada al segundo azul.
-  ['--color-on-accent', '--color-accent-strong'],
+  ['--color-on-accent-strong', '--color-accent-strong'],
+  ['--color-on-danger', '--color-danger'],
+  ['--color-on-highlight', '--color-highlight'],
+  ['--color-on-highlight', '--color-highlight-strong'],
   ['--color-ok', '--color-bg'],
   ['--color-ok', '--color-surface'],
   ['--color-danger', '--color-bg'],
@@ -55,10 +58,9 @@ const PARES: Array<[string, string]> = [
 const MINIMO = 4.5
 
 /**
- * Extrae los tokens de un tema. El claro es el bloque `:root` de arriba; el
- * oscuro es el `:root` de dentro del `@media`, que solo redefine lo que cambia,
- * asi que se aplica ENCIMA del claro. Medir el oscuro sobre un objeto vacio
- * daria tokens indefinidos y una prueba que pasa sin medir nada.
+ * Extrae los tokens del tema. La paleta es una sola y oscura: el bloque `:root`
+ * de arriba. Los `@media` que quedan en el archivo (movimiento reducido) no
+ * llevan colores, asi que se corta ahi para no medir de mas.
  */
 function tokens(fuente: string): Record<string, string> {
   const out: Record<string, string> = {}
@@ -68,8 +70,7 @@ function tokens(fuente: string): Record<string, string> {
   return out
 }
 
-const claro = tokens(css.split('@media')[0]!)
-const oscuro = { ...claro, ...tokens(css.slice(css.indexOf('@media'))) }
+const oscuro = tokens(css.split('@media')[0]!)
 
 /** Luminancia relativa, WCAG 2.1 §relative luminance. */
 function luminancia(hex: string): number {
@@ -87,21 +88,17 @@ describe('contraste de los tokens', () => {
   it('la prueba mide colores de verdad', () => {
     // El fallo silencioso de esta prueba es un regex que deja de casar: los
     // temas quedan vacios, no hay par que medir y todo pasa en verde.
-    expect(Object.keys(claro).length).toBeGreaterThanOrEqual(9)
-    expect(oscuro['--color-accent']).not.toBe(claro['--color-accent'])
+    expect(Object.keys(oscuro).length).toBeGreaterThanOrEqual(9)
   })
 
   // La referencia de que el calculo esta bien y no solo es autoconsistente:
   // negro sobre blanco es 21:1 exacto, y un color contra si mismo es 1:1.
   it('el calculo coincide con los valores conocidos de WCAG', () => {
     expect(contraste('#000000', '#ffffff')).toBeCloseTo(21, 5)
-    expect(contraste('#2f6df6', '#2f6df6')).toBeCloseTo(1, 5)
+    expect(contraste('#2f6bff', '#2f6bff')).toBeCloseTo(1, 5)
   })
 
-  for (const [tema, valores] of [
-    ['claro', claro],
-    ['oscuro', oscuro],
-  ] as const) {
+  for (const [tema, valores] of [['oscuro', oscuro]] as const) {
     describe(`tema ${tema}`, () => {
       for (const [frente, fondo] of PARES) {
         it(`${frente} sobre ${fondo}`, () => {
