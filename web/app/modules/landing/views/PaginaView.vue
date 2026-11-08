@@ -34,9 +34,8 @@ useSeoMeta(metaDePagina(pagina.value, useRequestURL().href))
 </template>
 
 <style scoped>
+/* Sin ancho ni relleno: cada bloque es una banda que llega al borde. */
 .landing {
-  max-width: 60rem;
-  margin: 0 auto;
-  padding: var(--space-4);
+  display: block;
 }
 </style>

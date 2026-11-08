@@ -13,6 +13,7 @@ defineProps<{
 
 <template>
   <header class="cabecera">
+    <div class="interior">
     <NuxtLink to="/" class="marca">
       <img v-if="sitio.logo" :src="urlDeLogo(sitio.logo)" :alt="sitio.nombre" class="logo" />
       <span v-else class="nombre">{{ sitio.nombre }}</span>
@@ -24,17 +25,22 @@ defineProps<{
         </li>
       </ul>
     </nav>
+    </div>
   </header>
 </template>
 
 <style scoped>
 .cabecera {
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+.interior {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3) var(--space-6);
   align-items: center;
   justify-content: space-between;
-  max-width: 60rem;
+  max-width: var(--container-w);
   margin: 0 auto;
   padding: var(--space-4);
 }
