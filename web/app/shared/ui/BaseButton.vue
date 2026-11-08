@@ -6,7 +6,7 @@ import { computed } from 'vue'
 
 const props = withDefaults(
   defineProps<{
-    variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
+    variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'highlight'
     size?: 'sm' | 'md'
     // El atributo type por omision de <button> es 'submit'. Dentro de un
     // formulario, eso convierte cualquier boton auxiliar en un envio accidental.
@@ -69,10 +69,18 @@ const bloqueado = computed(() => props.disabled || props.loading)
   color: var(--color-on-accent-strong);
 }
 
+.v-highlight {
+  background: var(--color-highlight);
+  color: var(--color-on-highlight);
+}
+.v-highlight:hover:not(:disabled) {
+  background: var(--color-highlight-strong);
+}
+
 .v-secondary {
   background: var(--color-surface);
   color: var(--color-text);
-  border-color: var(--color-border);
+  border-color: var(--color-border-strong);
 }
 .v-secondary:hover:not(:disabled) {
   background: var(--color-surface-hover);

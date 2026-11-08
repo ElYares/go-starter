@@ -35,9 +35,9 @@ const modelo = defineModel<string>({ default: '' })
 .entrada {
   width: 100%;
   padding: var(--space-2) var(--space-3);
-  background: var(--color-surface);
+  background: var(--color-bg);
   color: var(--color-text);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-sm);
   font: inherit;
   font-size: var(--text-base);

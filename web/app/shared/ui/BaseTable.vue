@@ -91,8 +91,9 @@ td {
 }
 
 th {
-  background: var(--color-surface-hover);
+  background: var(--color-surface-accent);
   color: var(--color-text);
+  border-bottom: 2px solid var(--color-accent);
   font-weight: 600;
 }
 

@@ -34,6 +34,20 @@ const PARES: Array<[string, string]> = [
   // select, boton en foco), y entonces necesita su par de texto igual que el
   // de marca. Es la regla "todo relleno tiene su par" aplicada al segundo azul.
   ['--color-on-accent-strong', '--color-accent-strong'],
+  // Las superficies de la segunda ronda: el azul tintado de lo destacado y el
+  // fondo hundido del menu lateral.
+  ['--color-text', '--color-surface-accent'],
+  ['--color-text-muted', '--color-surface-accent'],
+  ['--color-accent-strong', '--color-surface-accent'],
+  ['--color-ok', '--color-surface-accent'],
+  ['--color-danger', '--color-surface-accent'],
+  ['--color-text', '--color-surface-sidebar'],
+  ['--color-text-muted', '--color-surface-sidebar'],
+  ['--color-accent-strong', '--color-surface-sidebar'],
+  ['--color-highlight', '--color-bg'],
+  ['--color-highlight-strong', '--color-bg'],
+  ['--color-highlight-strong', '--color-surface'],
+  ['--color-highlight-strong', '--color-surface-hover'],
   ['--color-on-danger', '--color-danger'],
   ['--color-on-highlight', '--color-highlight'],
   ['--color-on-highlight', '--color-highlight-strong'],
@@ -118,4 +132,15 @@ describe('contraste de los tokens', () => {
       }
     })
   }
+
+  // El borde de un campo no es texto: WCAG 1.4.11 pide 3:1 contra lo que lo
+  // rodea. --color-border no llega y es a proposito, es un separador.
+  describe('borde de los campos', () => {
+    for (const fondo of ['--color-bg', '--color-surface', '--color-surface-hover']) {
+      it(`--color-border-strong sobre ${fondo}`, () => {
+        const razon = contraste(oscuro['--color-border-strong']!, oscuro[fondo]!)
+        expect(razon).toBeGreaterThanOrEqual(3)
+      })
+    }
+  })
 })

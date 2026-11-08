@@ -21,13 +21,19 @@
   color-scheme: dark;
 
   --color-bg: #090a10;
-  --color-surface: #12141d;
+  --color-surface: #141a2e;
   /* El realce de una fila o un boton fantasma al pasar el raton. Es un fondo,
      asi que tiene sus pares de texto medidos como cualquier otro. */
-  --color-surface-hover: #1b1e29;
+  --color-surface-hover: #1d2644;
   --color-text: #f2f4fa;
   --color-text-muted: #a2a8bc;
-  --color-border: #272b39;
+  --color-border: #2d3a63;
+  /* El borde de un campo: tiene que verse (3:1), y --color-border no llega. */
+  --color-border-strong: #6b7bb5;
+  /* El menu lateral, mas hundido que las tarjetas, y el azul tintado de lo
+     seleccionado o destacado (cabecera de tabla, pildora de acento). */
+  --color-surface-sidebar: #0d1124;
+  --color-surface-accent: #172454;
 
   /* Electric blue es #2f6bff (en --color-brand-glow, los halos). Como relleno
      con texto blanco ese valor da 4.4998:1, a una milesima del minimo, asi que

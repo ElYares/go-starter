@@ -39,9 +39,9 @@ withDefaults(
   border-color: var(--color-border);
 }
 .v-accent {
-  background: var(--color-surface-hover);
+  background: var(--color-surface-accent);
   color: var(--color-accent-strong);
-  border-color: var(--color-accent-strong);
+  border-color: var(--color-accent);
 }
 .v-ok {
   background: var(--color-surface-hover);
